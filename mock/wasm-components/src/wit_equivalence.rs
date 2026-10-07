@@ -25,7 +25,7 @@
 //! Both WIT files are read-only to this lane; the comparison is `include_str!`
 //! only, nothing is written back.
 
-/// The frozen design artefact. Read-only (ADR-004, `mock/LANES.md` §4).
+/// The frozen design artefact. Read-only (ADR-004, `mock/README.md` §4).
 pub const DESIGN_WIT: &str = include_str!("../../../schemas/sandtree_provider_v1.wit");
 
 /// The parse-legal copy `wasmtime::component::bindgen!` actually reads.

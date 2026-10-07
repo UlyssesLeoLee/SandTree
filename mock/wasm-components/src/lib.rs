@@ -48,7 +48,7 @@
 //!
 //! # Scope
 //!
-//! Mock-only. `crates/*` must never depend on this crate (see `mock/LANES.md`).
+//! Mock-only. `crates/*` must never depend on this crate (see `mock/README.md`).
 
 #![deny(missing_docs)]
 
