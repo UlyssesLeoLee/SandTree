@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sandtree_model::capability::{Capability, CapabilitySet};
-use sandtree_model::error::{DomainError, ErrorCode};
+use sandtree_model::error::DomainError;
 use sandtree_model::id::{PluginId, ResourceId};
 use sandtree_observation_model::{
     ObservationCapabilities, ObservationRequest, ObservationSnapshot,
@@ -33,7 +33,7 @@ use sandtree_sdk::ports::{ObservationProvider, ProviderDescriptor};
 use tokio::sync::RwLock;
 use tracing::warn;
 
-use crate::advertisement::{parse_advertisement, RefAdvertisement};
+use crate::advertisement::parse_advertisement;
 use crate::observation::{
     degraded_snapshot, git_remote_capabilities, snapshot_from_advertisement, unavailable_snapshot,
     DOMAIN,
@@ -133,32 +133,6 @@ impl GitRemoteProvider {
             .map(|c| c.url.endpoint_scope())
     }
 
-    /// Fetch and parse the advertisement for a resource.
-    ///
-    /// Separated from [`ObservationProvider::observe`] so the end-to-end tests
-    /// can drive the real transport and the real parser while the policy gate
-    /// stays in one place.
-    pub async fn fetch_advertisement(
-        &self,
-        resource_id: &ResourceId,
-    ) -> Result<RefAdvertisement, TransportError> {
-        let cfg = self.endpoints.read().await.get(resource_id).cloned();
-        let Some(cfg) = cfg else {
-            // No endpoint is not an error state of the network; it is a
-            // configuration gap, reported as such by the caller.
-            return Err(TransportError::Failed(
-                "no git remote is registered".to_string(),
-            ));
-        };
-        let url = cfg.url.info_refs_url();
-        let resp = self.transport.get(&url, self.max_body).await?;
-        parse_advertisement(&resp.body).map_err(|e| {
-            // An advertisement we could not read is a transport-level failure
-            // for the caller, never an empty ref list.
-            TransportError::Failed(e.to_string())
-        })
-    }
-
     /// Which parser/transport error this is, for the snapshot health decision.
     pub(crate) fn classify(e: &TransportError) -> ObservationFailure {
         match e {
@@ -229,12 +203,14 @@ impl ObservationProvider for GitRemoteProvider {
         };
 
         let url = cfg.url.info_refs_url();
-        // Defence in depth, immediately before the socket: the permit must
-        // still cover the request the fetch is about to make. `authorize`
-        // already checked these fields, so this can only fire if something
-        // rebuilt the request between the gate and here — which is exactly the
-        // moment a permit would otherwise authorize a different endpoint than
-        // the one that was judged.
+        // Binding, not a live defence. `authorize` already checked the
+        // resource, domain, channel and endpoint, and nothing between here and
+        // the socket can change them -- so today this cannot fire. It is here
+        // because the permit is the only thing that carries those four fields
+        // across the gate, and a refactor that rebuilt the request (a different
+        // domain, a widened scope) would otherwise fetch somewhere the gate
+        // never judged. Stated plainly so nobody mistakes it for an active
+        // control that is being exercised.
         if !permit.covers(&request) {
             return Ok(unavailable_snapshot(
                 req.resource_id.clone(),
@@ -314,11 +290,6 @@ pub fn declared_capabilities() -> Vec<Capability> {
         Capability::global(CapabilityNamespace::Observation, "observe:metadata"),
         Capability::global(CapabilityNamespace::Net, "connect"),
     ]
-}
-
-/// Map a policy refusal onto the error a caller sees when it insists on a result.
-pub fn refusal_error(reason: &str) -> DomainError {
-    DomainError::new(ErrorCode::POLICY_DENIED, reason.to_string())
 }
 
 #[cfg(test)]

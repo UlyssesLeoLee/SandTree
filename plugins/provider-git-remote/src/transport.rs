@@ -200,10 +200,14 @@ mod tests {
     }
 
     impl TestServer {
+        /// Start a server. The handler returns `(status, headers, body)`; the
+        /// header list is a Vec rather than an optional content type because the
+        /// redirect test needs to set `Location`.
         async fn start<F, Fut>(handler: F) -> Self
         where
             F: Fn(String) -> Fut + Send + Sync + 'static,
-            Fut: std::future::Future<Output = (u16, Option<String>, String)> + Send + 'static,
+            Fut:
+                std::future::Future<Output = (u16, Vec<(String, String)>, String)> + Send + 'static,
         {
             let (tx, rx) = oneshot::channel::<()>();
             let hits = Arc::new(AtomicU32::new(0));
@@ -217,10 +221,10 @@ mod tests {
                 async move {
                     hits.fetch_add(1, Ordering::SeqCst);
                     let url = req.uri().to_string();
-                    let (status, content_type, body) = handler(url).await;
+                    let (status, headers, body) = handler(url).await;
                     let mut b = Response::builder().status(status);
-                    if let Some(ct) = content_type {
-                        b = b.header("content-type", ct);
+                    for (name, value) in headers {
+                        b = b.header(name, value);
                     }
                     Ok::<_, Infallible>(b.body(Full::new(Bytes::from(body))).unwrap())
                 }
@@ -281,8 +285,12 @@ mod tests {
         let server = TestServer::start(|_url| async {
             (
                 200,
-                Some("application/x-git-upload-pack-advertisement".to_string()),
-                "001e# service=git-upload-pack\n0000".to_string(),
+                vec![(
+                    "content-type".into(),
+                    "application/x-git-upload-pack-advertisement".into(),
+                )],
+                crate::pktline::encode("# service=git-upload-pack\n").unwrap()
+                    + &crate::pktline::encode_flush(),
             )
         })
         .await;
@@ -308,7 +316,10 @@ mod tests {
         let server = TestServer::start(|_url| async {
             (
                 200,
-                Some("application/x-git-upload-pack-advertisement; charset=utf-8".to_string()),
+                vec![(
+                    "content-type".into(),
+                    "application/x-git-upload-pack-advertisement; charset=utf-8".into(),
+                )],
                 "ok".to_string(),
             )
         })
@@ -322,8 +333,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_redirect_is_never_followed_and_never_reaches_its_target() {
+        // The SSRF test. A sandbox controls this endpoint, so a `302` pointing
+        // at `169.254.169.254` (or anything else outside the granted
+        // `net:connect:<host:port>` scope) is the obvious way to make the host
+        // fetch something the operator never authorised.
+        //
+        // This asserts the property from the *outside*: the redirect target is
+        // a second real server that would happily answer, and the assertion is
+        // that it is never contacted. Asserting only on the returned error
+        // would pass even if the client followed the redirect and then failed
+        // for an unrelated reason.
+        let target = TestServer::start(|_url| async {
+            (
+                200,
+                vec![],
+                crate::pktline::encode("# service=git-upload-pack\n").unwrap(),
+            )
+        })
+        .await;
+        let target_url = target.url("/stolen");
+
+        let server = TestServer::start(move |_url| {
+            let location = target_url.clone();
+            async move { (302, vec![("location".into(), location)], "".to_string()) }
+        })
+        .await;
+
+        let t = HyperTransport::new().unwrap();
+        let result = t.get(&server.url("/repo.git/info/refs"), 64 * 1024).await;
+
+        // No redirect is ever treated as a successful read.
+        assert!(
+            result.is_err(),
+            "a 3xx must not be reported as a fetched advertisement: {result:?}"
+        );
+        assert_eq!(
+            result.unwrap_err(),
+            TransportError::StatusNotSuccess { status: 302 }
+        );
+        // And the decisive one: the redirect target was never reached.
+        assert_eq!(
+            target.hits(),
+            0,
+            "the client followed a redirect to {} -- every endpoint scope \
+             in this design is bypassable by a 302",
+            target.url("/stolen")
+        );
+    }
+
+    #[tokio::test]
     async fn a_missing_content_type_is_reported_as_absent_not_as_empty_string() {
-        let server = TestServer::start(|_url| async { (200, None, "ok".to_string()) }).await;
+        let server = TestServer::start(|_url| async { (200, vec![], "ok".to_string()) }).await;
         let t = HyperTransport::new().unwrap();
         let resp = t.get(&server.url("/x"), 1024).await.unwrap();
         assert_eq!(resp.content_type, None);
@@ -333,7 +394,7 @@ mod tests {
     async fn a_non_success_status_is_reported_rather_than_parsed() {
         // Break by passing the body through anyway, and a 500 page gets fed
         // to the pkt-line parser as if it were an advertisement.
-        let server = TestServer::start(|_url| async { (500, None, "boom".to_string()) }).await;
+        let server = TestServer::start(|_url| async { (500, vec![], "boom".to_string()) }).await;
         let t = HyperTransport::new().unwrap();
         assert_eq!(
             t.get(&server.url("/x"), 1024).await.unwrap_err(),
@@ -345,7 +406,7 @@ mod tests {
     async fn an_oversized_body_is_cut_off_rather_than_buffered() {
         // A sandbox controls this response; without the bound one crafted
         // advertisement can allocate without limit.
-        let server = TestServer::start(|_url| async { (200, None, "x".repeat(100_000)) }).await;
+        let server = TestServer::start(|_url| async { (200, vec![], "x".repeat(100_000)) }).await;
         let t = HyperTransport::new().unwrap();
         assert_eq!(
             t.get(&server.url("/x"), 1024).await.unwrap_err(),
@@ -359,7 +420,7 @@ mod tests {
         // the whole observation plane.
         let server = TestServer::start(|_url| async {
             tokio::time::sleep(Duration::from_secs(30)).await;
-            (200, None, String::new())
+            (200, vec![], String::new())
         })
         .await;
         let t = HyperTransport::with_timeout_ms(200).unwrap();

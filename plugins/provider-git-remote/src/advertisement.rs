@@ -97,7 +97,13 @@ impl RefAdvertisement {
     /// never an empty list. Confusing the two would let a transport failure
     /// masquerade as a finding (ADR-OBS-001).
     pub fn is_empty_repository(&self) -> bool {
-        self.refs.iter().all(|r| r.is_unborn() || r.name == "HEAD")
+        // The `!is_empty()` term is load-bearing. `all` over an empty iterator
+        // is vacuously true, so without it this predicate would report "an
+        // empty repository" for a value carrying no information at all -- and
+        // `RefAdvertisement`'s fields are public, so it can be built by hand.
+        // `parse_advertisement` rejects a zero-ref advertisement, which closes
+        // the main path; this closes the rest.
+        !self.refs.is_empty() && self.refs.iter().all(|r| r.is_unborn() || r.name == "HEAD")
     }
 
     /// Look up one ref by exact name.
@@ -139,6 +145,14 @@ pub enum AdvertisementError {
     /// The server answered with protocol v2, which this channel does not speak.
     #[error("server answered with git protocol v2; this channel requests v0")]
     ProtocolVersion2Unsupported,
+    /// The advertisement carried no refs at all.
+    ///
+    /// A real repository — empty or not — always advertises at least `HEAD`. A
+    /// response with the service line and nothing else is a truncated reply or
+    /// an endpoint that is not a git server, and reporting it as "an empty
+    /// repository" would turn a broken channel into a finding (ADR-OBS-001).
+    #[error("advertisement carried no refs; that is not what an empty repository sends")]
+    NoRefs,
     /// A ref line did not have the `<oid> SP <name>` shape.
     #[error("malformed ref line: {0:?}")]
     MalformedRefLine(String),
@@ -260,6 +274,14 @@ pub fn parse_advertisement(body: &str) -> Result<RefAdvertisement, Advertisement
 
     // CONTRACTS §6: deterministic order, independent of server ordering.
     refs.sort_by(|a, b| (a.name.as_str(), a.peeled).cmp(&(b.name.as_str(), b.peeled)));
+
+    // Checked after sorting so the guard cannot be reordered past it by a later
+    // refactor, and before any caller can ask `is_empty_repository()` -- on an
+    // empty `refs` that predicate is vacuously true, which is exactly how a
+    // truncated response would masquerade as an empty repository.
+    if refs.is_empty() {
+        return Err(AdvertisementError::NoRefs);
+    }
 
     Ok(RefAdvertisement {
         refs,
@@ -470,6 +492,40 @@ mod tests {
             parse_advertisement(&s).unwrap_err(),
             AdvertisementError::UnexpectedRefName("sneaky".to_string())
         );
+    }
+
+    #[test]
+    fn a_zero_ref_response_is_refused_rather_than_reported_as_an_empty_repository() {
+        // The failure this prevents: `is_empty_repository()` is `all(...)`, and
+        // `all` on an empty list is vacuously true. So without this guard a
+        // truncated reply -- service line, flush, nothing else -- would produce
+        // a Healthy snapshot saying `empty_repository: true` about a sandbox
+        // that may well have hundreds of branches.
+        let mut s = String::new();
+        s.push_str(&pktline::encode("# service=git-upload-pack\n").unwrap());
+        s.push_str(pktline::encode_flush().as_str());
+
+        assert_eq!(
+            parse_advertisement(&s).unwrap_err(),
+            AdvertisementError::NoRefs
+        );
+
+        // And the contrast that makes the distinction real: a genuine empty
+        // repository *does* send an unborn HEAD, and parses successfully.
+        let mut real = String::new();
+        real.push_str(&pktline::encode("# service=git-upload-pack\n").unwrap());
+        real.push_str(pktline::encode_flush().as_str());
+        real.push_str(
+            &pktline::encode(concat!(
+                "0000000000000000000000000000000000000000 HEAD\0",
+                "symref=HEAD:refs/heads/main object-format=sha1\n"
+            ))
+            .unwrap(),
+        );
+        real.push_str(pktline::encode_flush().as_str());
+        let adv = parse_advertisement(&real).unwrap();
+        assert!(adv.is_empty_repository());
+        assert_eq!(adv.refs.len(), 1);
     }
 
     #[test]

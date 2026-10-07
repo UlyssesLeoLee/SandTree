@@ -344,12 +344,13 @@ impl ObservationProvider for McpRemoteProvider {
             }
         };
 
-        // Defence in depth, immediately before the socket: the permit must
-        // still cover the request the call is about to make. `authorize`
-        // already checked these fields, so this can only fire if something
-        // rebuilt the request between the gate and here — which is exactly the
-        // moment a permit would otherwise authorize a different endpoint than
-        // the one that was judged.
+        // Binding, not a live defence. `authorize` already checked the resource,
+        // domain, channel and endpoint, and nothing between here and the socket
+        // can change them -- so today this cannot fire. It is here because the
+        // permit is the only thing that carries those four fields across the
+        // gate, and a refactor that rebuilt the request would otherwise call
+        // somewhere the gate never judged. Stated plainly so nobody mistakes it
+        // for an active control that is being exercised.
         if !permit.covers(&request) {
             return Ok(unavailable_snapshot(
                 req.resource_id.clone(),

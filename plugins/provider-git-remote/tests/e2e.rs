@@ -193,7 +193,14 @@ async fn a_sandbox_published_remote_is_fetched_over_http_and_read() {
         fs["refs"][2]["object_id"],
         serde_json::json!("a1b2c3d4e5f60718293a4b5c6d7e8f9012345678")
     );
-    assert!(fs["evidence_hash"].is_null() || fs["evidence_hash"].is_string());
+    // The evidence hash lives in the *provenance*, not in the value. Asserting
+    // `fs["evidence_hash"]` here would be vacuously true forever, because that
+    // key never exists in the value.
+    let evidence = snap.get(DOMAIN).unwrap().provenance.evidence_hash.clone();
+    assert!(
+        evidence.as_deref().is_some_and(|h| h.len() == 64),
+        "a real BLAKE3 hex digest must be attached, got {evidence:?}"
+    );
 
     // Exactly one request, to the documented URL.
     assert_eq!(server.hits(), 1);
