@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SandTree Windows installer source.
+
+  Scope: PER-USER, no elevation (NFR-S01). The daemon's IPC pipe is scoped to
+  the current account and the kernel never asks for administrator rights, so a
+  per-machine install would buy nothing and cost a UAC prompt on every machine
+  that only ever runs one user's containers.
+
+  What this deliberately does NOT do:
+
+  * It does not modify PATH. WiX's environment helpers REPLACE the variable
+    rather than append to it, and an installer that silently overwrites a
+    user's PATH is a far worse outcome than one that asks them to add one
+    directory. INSTALL.txt in the package says how to do it.
+  * It does not register a Windows service. The daemon is per-user and is
+    started by the user; a service would imply a machine-scoped identity the
+    design explicitly does not use.
+  * It does not ship schemas/ or wit/. Those are `include_str!`'d into the
+    binaries at compile time, so there is no runtime data file to install.
+
+  GUIDs below are STABLE and must not be regenerated. The UpgradeCode is what
+  lets a later version replace this one; the component GUIDs are what let MSI
+  decide file-by-file whether to rewrite. Changing either orphans every
+  existing install: the new package installs side by side instead of upgrading,
+  and the old one is left behind with no way to remove it.
+
+  Build with scripts/package.ps1, which supplies ProductVersion and SourceDir
+  and stages the files this references.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="SandTree"
+      Manufacturer="SandTree Project"
+      Version="$(var.ProductVersion)"
+      UpgradeCode="8f3c1a52-6d40-4b7e-9c18-2a5e7f01d3b6"
+      Scope="perUser"
+      Compressed="yes"
+      InstallerVersion="500"
+      Language="1033"
+      Codepage="1252">
+
+    <SummaryInformation Description="SandTree v$(var.ProductVersion) — Sandbox and Docker control plane" />
+
+    <!-- AllowDowngrades="yes" lets an operator roll back by installing an
+         older package; it is mutually exclusive with DowngradeErrorMessage,
+         which is what you want only when downgrades are refused. Keeping
+         downgrades allowed matches the design's "no telemetry, no account,
+         the operator owns their machine" posture. -->
+    <MajorUpgrade AllowDowngrades="yes" Schedule="afterInstallInitialize" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Per-user install root. LocalAppDataFolder is per-user, so this never
+         needs elevation; the same tree is what the uninstaller removes. -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="SandTree">
+        <Directory Id="BINFOLDER" Name="bin" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="SHORTCUTFOLDER" Name="SandTree" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="SandTree" Level="1" AllowAbsent="no"
+             Description="CLI, daemon, plugin worker and the Windows Sandbox probe.">
+      <ComponentGroupRef Id="BinComponents" />
+      <ComponentGroupRef Id="DocComponents" />
+    </Feature>
+
+    <!-- Start menu entry, as its own feature so an operator who does not want
+         a shortcut can deselect it without giving up the binaries. -->
+    <Feature Id="Shortcuts" Title="Start menu shortcut" Level="1">
+      <ComponentGroupRef Id="ShortcutComponents" />
+    </Feature>
+
+    <ComponentGroup Id="BinComponents" Directory="BINFOLDER">
+      <Component Id="CliComponent" Guid="e3410b0b-6cd0-4c1f-ae1e-85f97c29cbef">
+        <File Id="SandtreeExe" Source="$(var.SourceDir)\bin\sandtree.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="DaemonComponent" Guid="e459ce8b-bcad-414d-b686-5fc3ea80502d">
+        <File Id="DaemonExe" Source="$(var.SourceDir)\bin\sandtree-daemon.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="PluginWorkerComponent" Guid="31ad589e-df73-473c-8671-7875ec718b8a">
+        <File Id="PluginWorkerExe" Source="$(var.SourceDir)\bin\sandtree-plugin-worker.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="ProbeComponent" Guid="25f0f780-539a-4666-a6e2-e4615751efc5">
+        <File Id="ProbeExe" Source="$(var.SourceDir)\bin\probe-windows.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="DocComponents" Directory="INSTALLFOLDER">
+      <Component Id="LicenseComponent" Guid="5b08eea5-c0f7-49fa-bec1-bb88f5a88f31">
+        <File Id="LicenseFile" Source="$(var.SourceDir)\LICENSE" KeyPath="yes" />
+      </Component>
+      <Component Id="VersionComponent" Guid="1dd8eee3-a992-4521-9794-53b6e771ca5f">
+        <File Id="VersionFile" Source="$(var.SourceDir)\VERSION.txt" KeyPath="yes" />
+      </Component>
+      <Component Id="ManifestComponent" Guid="668f5bbd-0373-4d1b-a59c-d1a5c6a2e2fb">
+        <File Id="ManifestFile" Source="$(var.SourceDir)\MANIFEST.sha256" KeyPath="yes" />
+      </Component>
+      <Component Id="InstallDocComponent" Guid="9f8f0114-423d-4b42-aecb-c70cb5c46507">
+        <File Id="InstallDocFile" Source="$(var.SourceDir)\INSTALL.txt" KeyPath="yes" />
+      </Component>
+      <Component Id="ReadmeComponent" Guid="c5bfa12c-0e13-4ba9-b90c-24e9b1555238">
+        <File Id="ReadmeFile" Source="$(var.SourceDir)\README.md" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Start menu entry for the CLI. A shortcut rather than a PATH change,
+         for the reason in the header comment. -->
+    <ComponentGroup Id="ShortcutComponents" Directory="SHORTCUTFOLDER">
+      <Component Id="ShortcutComponent" Guid="a7d2e914-5c36-4f80-9e2b-1d6c8a43f705">
+        <Shortcut Id="SandtreeCliShortcut"
+                  Name="SandTree CLI"
+                  Description="SandTree command line client"
+                  Target="[INSTALLFOLDER]bin\sandtree.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\SandTree\SandTree"
+                       Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>

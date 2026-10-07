@@ -29,6 +29,11 @@ desktop.ini
 .idea/
 .vscode/
 
+# Release packaging output (scripts/package.ps1). Build artifacts, never
+# committed: the tree is reproducible from the sources plus one command, and
+# committing it would put 6 MB of binaries in every clone.
+dist/
+
 # Test and coverage output
 *.profraw
 coverage/

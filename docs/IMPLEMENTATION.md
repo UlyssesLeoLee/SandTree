@@ -177,7 +177,7 @@ Rust 测试说的是「代码保证 Y」，仓库里没有任何东西关联二�
 状态词汇刻意收窄：`PASS` / `FAIL` / `PARTIAL`（映射有笔误或测试被改名）/
 `UNMAPPED`（基线有用例但本仓无任何验证）/ `MANUAL`（设计要求人工验收）。
 
-**当前状态**：925 条测试，六道 gate 全绿，覆盖自检 925/925；153/159 条设计用例
+**当前状态**：927 条测试，六道 gate 全绿，覆盖自检 927/927；153/159 条设计用例
 已完全映射且执行通过，0 FAIL、0 PARTIAL。剩下 6 条 UNMAPPED 是真实缺口，
 已在矩阵里逐条写明原因（取消传播、日志跟随取消、in-use 卷删除保护、UI 延迟、
 日志量、UI 认知负荷），其中 UI 类因本仓无 UI 层而不可自动化。
@@ -196,8 +196,43 @@ Rust 测试说的是「代码保证 Y」，仓库里没有任何东西关联二�
 一条漏配的 gate 和一条全绿的 gate 输出完全一样。覆盖自检就是用来消除这个歧义的。
 
 
-## 6. license 门禁（cargo-deny 的离线替代）
+## 5.2 Windows 打包
 
+`scripts/package.ps1` 一条命令同时产出便携 ZIP 与 per-user MSI，两者由同一份
+暂存目录生成，所以**不可能漂移**：
+
+```
+dist/SandTree-1.1.0-x64.zip     2.98 MB   解压即用
+dist/SandTree-1.1.0-x64.msi     2.41 MB   安装程序，免提权
+```
+
+载荷只有 4 个可执行文件 + 许可与说明文档。这不是取巧，是代码实际需要的形态：
+`schemas/001_init.sql` 与两个 WIT 都是 `include_str!` 编译进二进制的，
+运行期没有任何数据文件要放；kernel 首次运行自建 `%LOCALAPPDATA%\sandtree`。
+
+| 决定 | 理由 |
+| --- | --- |
+| per-user、不提权 | NFR-S01：管道按用户隔离，daemon 不请求提权 |
+| **不修改 PATH** | WiX 的环境变量接口是**覆盖**不是追加。会悄悄改掉用户 PATH 的安装程序，比让用户自己加一个目录糟糕得多；`INSTALL.txt` 给了两条加法 |
+| 不注册 Windows 服务 | 服务意味着机器级身份，设计明确不用 |
+| 快捷方式单独一个 Feature | 不想要快捷方式的运维可以取消勾选而不放弃二进制 |
+| WiX 5 而不是 6/7 | v6+ 要求接受 OSMF EULA。**法律条款不由打包脚本替用户接受**，所以钉在最后一条 MIT 许可线，脚本会在版本不对时直接失败 |
+
+**验证不是「编译 exit 0」**：两个包都被 `msiexec /a` / `Expand-Archive` 真正解开，
+逐个核对 `MANIFEST.sha256` 的 SHA-256、核对 4 个 exe 的大小，并实际运行
+`sandtree --version`、`sandtree-daemon --version`、`sandtree-daemon --check`
+（后者报 31 个方法、0 缺口）。
+
+打包过程本身暴露并修掉了两件事：
+
+- **`--version` 根本不存在**。我写完 `INSTALL.txt` 让用户用它验证安装，解包一跑
+  才发现 `sandtree --version` 答 `unknown command`。文档承诺了二进制不兑现的事。
+  现已在 CLI 与 daemon 补上（`apps/cli/src/lib.rs::version`），`--help` 里也列出。
+- **ZIP 解开是散文件**。`ZipFile::CreateFromDirectory(..., includeBaseDirectory: false)`
+  让 9 个文件直接倒在目标目录，没有外层文件夹 —— 解到 Downloads 里就是一片狼藉。
+  改成 `true`，与 MSI 的 `%LOCALAPPDATA%\Programs\SandTree` 行为一致。
+
+## 6. license 门禁（cargo-deny 的离线替代）
 `cargo deny check` 是 NFR-E03 的门禁，但本机无 `cargo-deny` 二进制且无法联网安装。
 `scripts/license_gate.py` 对同一问题做等价审计：
 

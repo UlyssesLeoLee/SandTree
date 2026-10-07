@@ -13,6 +13,12 @@ fn main() -> ExitCode {
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            // NFR-U01: the daemon's version has to be readable without
+            // starting it, or "which build is on this box" needs a debugger.
+            "--version" | "-V" => {
+                println!("sandtree-daemon {}", env!("CARGO_PKG_VERSION"));
+                return ExitCode::SUCCESS;
+            }
             "--data-dir" => match args.next() {
                 Some(v) => cfg.data_dir = v.into(),
                 None => return fail("--data-dir needs a value"),
@@ -38,7 +44,8 @@ fn main() -> ExitCode {
             "-h" | "--help" => {
                 println!(
                     "sandtree-daemon [--data-dir DIR] [--pipe NAME] \
-                     [--reconcile-interval-ms N] [--stale-grace-ms N] [--check]"
+                     [--reconcile-interval-ms N] [--stale-grace-ms N] \
+                     [--check] [--version]"
                 );
                 return ExitCode::SUCCESS;
             }

@@ -188,10 +188,25 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
     }
 }
 
+/// Version string the CLI reports.
+///
+/// NFR-U01 (the operator has to be able to tell what they are running): a
+/// packaged binary whose version cannot be read is a support ticket waiting to
+/// happen. `scripts/package.ps1` stamps the same number into the MSI and into
+/// `VERSION.txt`, so this is also how an operator confirms the installer put
+/// the build they expected on their machine.
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 /// Help text.
 pub fn help() -> String {
+    // `env!` expands to a literal, so `concat!` folds the version in at compile
+    // time and the whole help text stays a `&str` array.
+    const VERSION_LINE: &str = concat!("version ", env!("CARGO_PKG_VERSION"));
     [
         "sandtree — Sandbox & Docker control plane",
+        VERSION_LINE,
         "",
         "USAGE:",
         "    sandtree tree [--provider ID] [--kind KIND]",
@@ -199,6 +214,12 @@ pub fn help() -> String {
         "    sandtree invoke <resource-id> <op> [--force]",
         "    sandtree diagnostics",
         "    sandtree methods",
+        "",
+        "GLOBAL:",
+        "    --local               answer from an in-process kernel, no daemon",
+        "    --data-dir DIR        kernel data directory",
+        "    --pipe NAME           daemon IPC pipe",
+        "    --version, -V         print the version and exit",
         "",
         "NOTES:",
         "    Destructive operations require --force. The daemon refuses them",
@@ -367,5 +388,33 @@ mod tests {
         let h = help();
         assert!(h.contains("--force"), "{h}");
         assert!(h.contains("audit"), "{h}");
+    }
+
+    #[test]
+    fn the_help_text_says_how_to_ask_for_the_version() {
+        // A help text that omits the version flag is how `--version` ends up
+        // undiscoverable: it works, and nothing says so.
+        let h = help();
+        assert!(
+            h.contains("--version"),
+            "help does not mention --version:\n{h}"
+        );
+        assert!(
+            h.contains(version()),
+            "help does not print the version it reports"
+        );
+    }
+
+    #[test]
+    fn the_version_is_the_workspace_version() {
+        // The packaging script stamps env!("CARGO_PKG_VERSION") into the MSI
+        // product version and into VERSION.txt. If this ever diverged from the
+        // Cargo manifest, a package could claim a version its binary does not
+        // report, and the mismatch would only surface in a bug report.
+        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
+        assert!(
+            !version().is_empty(),
+            "an empty version is worse than none: it reads as 'unknown' silently"
+        );
     }
 }

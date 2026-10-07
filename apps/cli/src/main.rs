@@ -11,6 +11,13 @@ fn main() -> ExitCode {
     // Global flags come before the subcommand.
     while let Some(first) = args.first() {
         match first.as_str() {
+            // NFR-U01: an operator has to be able to tell what they are running.
+            // Before this existed, `sandtree --version` answered "unknown
+            // command", which is a confusing way to learn a binary exists.
+            "--version" | "-V" => {
+                println!("sandtree {}", sandtree_cli::version());
+                return ExitCode::SUCCESS;
+            }
             "--local" => {
                 cfg.local = true;
                 args.remove(0);

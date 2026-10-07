@@ -1,4 +1,4 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.48s
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.83s
      Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_cli-ea809faa54820564.exe)
 tests::a_failed_response_renders_the_stable_code: test
 tests::a_filter_option_without_a_value_is_an_error: test
@@ -11,9 +11,11 @@ tests::help_mentions_the_confirmation_requirement: test
 tests::invoke_is_not_forced_unless_the_flag_is_present: test
 tests::no_arguments_prints_help: test
 tests::show_requires_an_id: test
+tests::the_help_text_says_how_to_ask_for_the_version: test
+tests::the_version_is_the_workspace_version: test
 tests::tree_parses_filters: test
 
-12 tests, 0 benchmarks
+14 tests, 0 benchmarks
      Running unittests src\main.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree-c80138cdc259596a.exe)
 0 tests, 0 benchmarks
      Running tests\invariants.rs (E:\DevCache\cargo\target-dev\debug\deps\invariants-8950e5e654f0ccdd.exe)
