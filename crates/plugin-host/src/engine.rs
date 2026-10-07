@@ -181,6 +181,17 @@ impl ComponentGeneration {
         );
         store.limiter(|state| &mut state.limits);
 
+        // **Before the first guest call.** With `epoch_interruption` enabled a
+        // store starts with an epoch deadline of 0, which the engine has already
+        // passed: an un-armed call traps immediately with `wasm trap:
+        // interrupt`, before the guest executes a single instruction. Reading
+        // `descriptor` un-armed therefore made *every* component fail to load,
+        // and nothing noticed because nothing drove this path.
+        //
+        // The budget for this call comes from `limits`, not from a `Self` that
+        // does not exist yet — hence the free function rather than `self.arm`.
+        Self::arm_with(&limits, &mut store)?;
+
         let linker: Linker<HostState> = Linker::new(engine);
         let bindings =
             ProviderPlugin::instantiate(&mut store, &component, &linker).map_err(|e| {
@@ -220,8 +231,17 @@ impl ComponentGeneration {
     /// Called before every guest call: fuel is per-call, not per-generation, so
     /// a long-lived plugin still cannot accumulate an unbounded budget.
     fn arm(&self, store: &mut Store<HostState>) -> Result<(), DomainError> {
+        Self::arm_with(&self.limits, store)
+    }
+
+    /// The arming itself, separated so [`ComponentGeneration::load`] can use it
+    /// before a `Self` exists.
+    ///
+    /// One implementation, one invariant: a second copy of this logic is how the
+    /// load path ended up calling into the guest with no budget at all.
+    fn arm_with(limits: &WorkerLimits, store: &mut Store<HostState>) -> Result<(), DomainError> {
         store
-            .set_fuel(self.limits.fuel)
+            .set_fuel(limits.fuel)
             .map_err(|e| engine_error("failed to set the guest fuel budget", e))?;
         store.set_epoch_deadline(1);
         Ok(())
@@ -392,7 +412,7 @@ impl GenerationRuntime for ComponentGeneration {
         self.arm(&mut store)?;
         self.bindings
             .sandtree_plugin_lifecycle()
-            .call_prepare_upgrade(&mut *store, &target_version)
+            .call_prepare_upgrade(&mut *store, target_version)
             .map_err(|e| engine_error("lifecycle.prepare-upgrade trapped", e))?
             .map_err(component_error)
     }
@@ -402,7 +422,7 @@ impl GenerationRuntime for ComponentGeneration {
         self.arm(&mut store)?;
         self.bindings
             .sandtree_plugin_lifecycle()
-            .call_accept_upgrade(&mut *store, &from_version, state)
+            .call_accept_upgrade(&mut *store, from_version, state)
             .map_err(|e| engine_error("lifecycle.accept-upgrade trapped", e))?
             .map_err(component_error)
     }

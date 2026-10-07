@@ -443,3 +443,74 @@ gen1，且回滚把手一并丢失。
 
 **门禁**　`installing_over_a_live_plugin_is_refused_and_names_the_right_method`、
 `a_generation_displaced_by_a_racing_swap_is_still_retired`，两条均经变异验证（去掉修法立刻变红）。
+
+---
+
+## ADR-017 WASM 插件路径的端到端验证：先证明它可达，再谈它正确
+
+**背景**。`3e8203e` 把 `ComponentGeneration` 接上了 WIT `resource-provider`，但那一步的全部验证
+都止于 `decode` 契约：把 guest 返回的字符串喂给 `serde_json`。**`discover` / `inspect` /
+`invoke` 三个方法本身从未被驱动过。** 这不是「覆盖不足」，是「无法运行」——因为没有任何组件能通过
+`instance not valid to be used as export`，fixture 编译不过。
+
+本 ADR 记录为了让它跑起来而做的三件事，其中第三件是本仓最重要的发现。
+
+### 1. canonical ABI 的三条规则（实测，不是推断）
+
+逐签名二分（每个签名单独编译一个最小 component，看 encoder 的判决）定下三条：
+
+| 规则 | 内容 | 违反时的报错 |
+|---|---|---|
+| **实例必须导出自己签名用到的类型** | `(instance $lifecycle (export "descriptor-record" (type $dr)) ...)` 是让实例可作为 export 的那**一行** | `instance not valid to be used as export` |
+| **返回区指针是 core 函数的 `i32` 返回值，不是额外参数** | `canon lift` 由 guest 分配并返回地址；`canon lower` 才由 host 传入 | `lowered parameter types [...] do not match parameter types [...]` |
+| **unit ok-payload 不让 `result` 变便宜** | `result<_, string>` 是 `[disc, err_ptr, err_len]` 三个 i32，仍然超过 `MAX_FLAT_RESULTS` | 同上 |
+
+第二条最容易记反，记反的代价是每个函数各改一轮。ADR 与 `mock/wasm-components/src/engine.rs`
+都记了「先前那份错误病因是什么、被哪次否证推翻」，因为**错误的病因比没有病因更糟**——它会把下一个
+人带进一条死路（此前记录的「命名类型身份别名」就是这样，它推出的补救 `(alias outer ...)` 在
+component 类型位置上根本不解析，`outer` 是 core alias kind）。
+
+### 2. fixture 语料由生成器产出
+
+五个 fixture 现在由 `mock/scripts/gen_fixtures.ps1` 从同一份模板生成，派生件之间**只有导出块不同**。
+这让 `fixtures.rs` 里「派生件就是有效件改了一处」这句话从「靠人记得同步的 diff 断言」变成结构性事实。
+
+fixture 内嵌的 JSON 由 `tests/provider_binding.rs::the_valid_fixture_matches_the_dtos_it_embeds`
+对照产品 DTO 的 serde 输出来校验：DTO 一改，fixture 立刻红，并指向重新生成的命令。
+
+### 3. 缺陷：feature-gated 的代码不在门禁里（ADR-017 的真正内容）
+
+让端到端测试跑起来之后，第一次编译 `wasmtime-abi` 就暴露了三件事，全都不是新代码的错，而是
+**从来没被编译过**：
+
+1. **`ComponentGeneration::load` 在 arm 之前就调 guest。**
+   `epoch_interruption(true)` 下，store 的 epoch deadline 初值是 0，而引擎 epoch 已经过去了：
+   未 arm 的调用在 guest 执行第一条指令之前就 `wasm trap: interrupt`。
+   `load` 读 `lifecycle.descriptor` 是唯一一个走不到 `self.arm` 的调用点（那时 `self` 还不存在），
+   于是**任何组件都装不上**。修法是把 arming 拆成 `arm_with(limits, store)`，让 `load` 在构造
+   `Self` 之前就用同一份预算 arm 一次——一份实现，一个不变量。
+
+2. **`Worker::load` 编译不过**（`Arc<LoadedGeneration>` 缺 `clone`、`LoadedGeneration` 未包 `Arc`、
+   `Arc<ComponentGeneration>` 未向 `Arc<dyn ResourceProvider>` 转型）。整个插件加载通道在
+   `wasmtime-abi` 下从未构建成功。
+
+3. **`ComponentGeneration::serialize()` 产出的是原生目标文件**（本机以 `\x7fELF` 开头），不是 component
+   二进制；把它喂回 `Component::new` 会报 `input bytes aren't valid utf-8`，读起来像文本解析问题、
+   其实不是。取字节必须用 `wat::parse_str`。
+
+**根因是一条结构性的**：`cargo test --workspace` 与 `cargo clippy --workspace` 都不启用任何
+non-default feature，因此所有 `#[cfg(feature = ...)]` 的模块**不在门禁里**；而回归脚本的覆盖自检
+用 `cargo test --list` 统计「workspace 拥有多少测试」——**该命令只列出已编译的测试**，所以这个
+量具的输入集已经把 feature-gated 的那部分排除在外了。量具漏扫与扫描结果干净，在外观上完全一样。
+
+**结构性修法**（三条，缺一不可）：
+- `AGENTS.md` 的门禁改为 `cargo clippy --workspace --all-targets --all-features` /
+  `cargo test --workspace --all-features`；
+- `mock/scripts/run_regression.ps1` 新增 `mock-engine` gate 显式编译 engine 语料，并**断言它至少
+  跑了 1 条**——编译了零个的 gate 比没有 gate 更糟，它会安静地贡献 0；
+- 覆盖自检额外用 `--features sandtree-mock-wasm-components/engine --list` 列一次，把差值计入
+  `owned`，让「漏跑的 feature-gated 测试」重新变成可被抓到的缺口。
+
+**门禁**　`tests/provider_binding.rs` 9 条：descriptor / 七个 lifecycle 调用 / discover / inspect /
+invoke 全部走真实 guest；外加一条「装不上的组件在服务任何东西之前就被拒」。
+`mock-engine` 语料 7 条。变异验证：`load` 里去掉 `arm_with` 立刻变红（component 装不上）。

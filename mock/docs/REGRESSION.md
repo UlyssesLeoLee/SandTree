@@ -1,8 +1,8 @@
 # SandTree 回归测试报告
 
-- 运行标识：`20261008-064353`
+- 运行标识：`20261008-072754`
 - 设计用例：159 条（来自只读基线 `tests/test_cases.json`）
-- 实际执行 Rust 测试：1100 条（通过 1099 / 失败 0 / 按设计挂起 1）
+- 实际执行 Rust 测试：1127 条（通过 1126 / 失败 0 / 按设计挂起 1）
 
 > 执行数按**去重后的测试名**统计，各 gate 汇报的 `test result: ok. N passed` 相加会略大于它：cargo 对集成测试只打印模块路径、不打印所属二进制，两个二进制里的同名测试在证据里会被并成一条。要按二进制区分，用 `mock/scripts/extract_test_inventory.py`。
 
@@ -10,7 +10,7 @@
 
 | Gate | 用例数 | PASS | FAIL | PARTIAL | MANUAL | UNMAPPED |
 | --- | --- | --- | --- | --- | --- | --- |
-| UT | 50 | 49 | 0 | 0 | 0 | 1 |
+| UT | 50 | 48 | 0 | 1 | 0 | 1 |
 | IT | 49 | 47 | 0 | 0 | 0 | 2 |
 | ST | 37 | 34 | 0 | 0 | 0 | 3 |
 | UAT | 23 | 0 | 0 | 0 | 23 | 0 |
@@ -39,6 +39,7 @@
 
 | 用例 | 需求 | 标题 | 状态 | 说明 |
 | --- | --- | --- | --- | --- |
+| `UT-018` | FR-054 | WIT descriptor validation | PARTIAL |  |
 | `UT-025` | FR-023 | Operation cancellation | UNMAPPED | GAP: no cancellation test exists anywhere in the workspace. OperationState::Cancelled is declared and serialised |
 | `IT-005` | FR-024 | Container log follow cancel | UNMAPPED | GAP: no cancellation test exists. Log follow cancel (FR-024) has no executable coverage at all. |
 | `IT-008` | FR-027 | Volume in-use delete protection | UNMAPPED | GAP: no test covers in-use volume delete protection. provider.rs refuses prune outright but that is a different rule. |

@@ -1694,9 +1694,14 @@ dependencies = [
 name = "sandtree-mock-wasm-components"
 version = "1.1.0"
 dependencies = [
+ "sandtree-model",
+ "sandtree-plugin-host",
+ "sandtree-sdk",
  "serde",
  "serde_json",
+ "tokio",
  "wasmtime",
+ "wat",
 ]
 
 [[package]]

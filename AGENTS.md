@@ -85,10 +85,25 @@ $env:PATH="$env:USERPROFILE\.rustup\toolchains\1.98-x86_64-pc-windows-msvc\bin;$
 
 ```powershell
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
 cargo deny check        # license/source/advisory gate
 ```
+
+`--all-features` 不是可有可无的：
+
+**feature-gated 的模块等于不在门禁里。** `wasmtime-abi` 关着的时候，
+`crates/plugin-host/src/engine.rs`（整个 `ComponentGeneration` 适配器）和
+`apps/plugin-worker` 的 `load()` 都**没有被编译过**，里面有真实缺陷——
+`load` 在 arm 之前就调 guest，epoch 立即 trap，任何组件都装不上；
+`Worker::load` 甚至编译不过。标准 `cargo test --workspace` 同样看不见它们，
+而覆盖自检也看不见：`cargo test --list` 只列出**已编译**的测试，
+所以「workspace owns N tests」这个集合已经把 feature-gated 的那部分
+排除在外了——量具的输入集本身就是错的，红的和干净的长得一模一样。
+
+因此：门禁必须带 `--all-features`；`mock/scripts/run_regression.ps1` 另有
+`mock-engine` gate 显式编译 engine 语料，并断言它**至少跑了 1 条**测试
+（编译了零个的 gate 比没有 gate 更糟）。
 
 ## 提交与文档
 

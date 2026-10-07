@@ -12,9 +12,14 @@
     "host is required to produce. `expected_code` values are stable codes from",
     "schemas/error_codes.csv.",
     "",
-    "The three reject fixtures are byte-for-byte the valid one except for the",
-    "one targeted change named in `deviation`, so a rejection is attributable to",
-    "that change and nothing else."
+    "All five fixtures compile as real components. The four reject fixtures are",
+    "generated from the valid one by mock/scripts/gen_fixtures.ps1 and differ",
+    "from it only in the one export block named in `deviation`, so a rejection is",
+    "attributable to that change and nothing else.",
+    "",
+    "`blocked` is null everywhere. It existed to record why the accept fixture",
+    "could not compile; it can now, and a stale value there would make a host-side",
+    "test refuse to expect an accept for a component that binds."
   ],
   "fixtures": [
     {
@@ -26,18 +31,12 @@
       "declared_package": "sandtree:plugin@1.0.0",
       "exports": [
         "sandtree:plugin/lifecycle@1.0.0",
-        "sandtree:plugin/resource-provider@1.0.0",
-        "descriptor-record",
-        "list-u8",
-        "option-string",
-        "result-unit-string",
-        "result-string-string",
-        "result-list-u8-string"
+        "sandtree:plugin/resource-provider@1.0.0"
       ],
       "expected_outcome": "accept",
       "expected_code": null,
       "rejected_at": null,
-      "blocked": "Component-Model named-type export rule: an exported function may only use named value types, and exporting `descriptor-record` yields a freshly aliased type identity that `lifecycle.descriptor` does not reference. wasmtime 38 reports `instance not valid to be used as export`. The canonical ABI core signatures are otherwise accepted (each was fixed against the compiler). Fixing this needs an `(alias outer ...)` re-reference of the exported type, which is not expressible with confidence in hand-written WAT in this window."
+      "blocked": null
     },
     {
       "id": "wrong-package-name",

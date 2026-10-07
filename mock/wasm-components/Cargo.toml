@@ -20,10 +20,25 @@ serde_json.workspace = true
 # fixture; it is only what lets a test compile the WAT and assert the result
 # against a real engine. Off by default because the crate's whole reason to
 # exist is to be usable on a machine that cannot build guest wasm at all.
-wasmtime = { workspace = true, optional = true, features = ["wat"] }
+wasmtime = { workspace = true, optional = true }
+# `compile()` turns WAT text into component *binary*, which is what a host
+# loads. Handing text to wasmtime hides that conversion; producing the bytes
+# explicitly is the point. Gated with wasmtime so the default build stays small.
+wat = { version = "1", optional = true }
 
 [dev-dependencies]
+# The end-to-end binding check drives the *product* adapter over these
+# fixtures, so it depends on the product crates. The dependency direction is
+# mock -> product; no product crate may depend on this one (mock/README.md).
+sandtree-model.workspace = true
+sandtree-sdk.workspace = true
+sandtree-plugin-host = { workspace = true, features = ["wasmtime-abi"] }
+# Unconditional, unlike the `engine` feature above: the binding tests must run
+# in the ordinary `cargo test --workspace` gate, not only under a flag.
+wasmtime = { workspace = true, features = ["wat"] }
+wat = "1"
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = []
-engine = ["dep:wasmtime"]
+engine = ["dep:wasmtime", "dep:wat"]

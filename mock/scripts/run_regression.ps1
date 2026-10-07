@@ -153,8 +153,12 @@ if (-not $SkipContract) {
     if ($c -ne 0) { $failures += 'contract' }
 }
 
+# `--all-features` is load-bearing here, not decoration: without it the
+# `#[cfg(feature = "wasmtime-abi")]` unit tests inside `crates/plugin-host`
+# are never compiled, so they are never run, and nobody notices. That module is
+# where the WASM adapter lives.
 $c = Invoke-Gate -Name 'ut' -CargoArgs @(
-    'test', '--workspace', '--offline', '--lib',
+    'test', '--workspace', '--all-features', '--offline', '--lib',
     '--exclude', 'sandtree-mock-runtime',
     '--exclude', 'sandtree-mock-observation',
     '--exclude', 'sandtree-mock-wasm-components'
@@ -173,6 +177,40 @@ $c = Invoke-Gate -Name 'mock' -CargoArgs @(
     '-p', 'sandtree-mock-wasm-components'
 )
 if ($c -ne 0) { $failures += 'mock' }
+
+# The `engine` module of `sandtree-mock-wasm-components` is behind a default-OFF
+# feature, so the `mock` gate above never compiled it. It was red for as long as
+# it existed -- seven failing tests -- and nothing said so, because a feature-gated
+# module is also invisible to the coverage self-check below: `cargo test --list`
+# does not list tests that are not compiled, so "the workspace owns N tests" was
+# computed from a set that had already excluded them. That is the same shape as a
+# lint rule that scans the wrong path and returns zero rows: the gap and the clean
+# result look identical.
+#
+# So this gate exists, and the count assertion below it is what stops it from
+# silently becoming a no-op if the feature is ever renamed or dropped.
+$c = Invoke-Gate -Name 'mock-engine' -CargoArgs @(
+    'test', '--offline',
+    '-p', 'sandtree-mock-wasm-components',
+    '--features', 'engine', '--lib'
+)
+if ($c -ne 0) { $failures += 'mock-engine' }
+
+# A gate that compiles nothing passes. Pin the floor: if the engine module ever
+# stops existing, this goes red instead of quietly contributing zero tests.
+$engineLog = Join-Path $RunDir 'mock-engine.log'
+if (Test-Path $engineLog) {
+    $engineRan = @(Select-String -Path $engineLog -Pattern '^test engine::tests::').Count
+    if ($engineRan -lt 1) {
+        Write-Output ''
+        Write-Output "ENGINE GAP      : the mock-engine gate ran 0 engine-gated tests."
+        Write-Output '                  It passed, so it is worse than absent: the fixture corpus'
+        Write-Output '                  is no longer validated by a real engine and the run is green.'
+        $failures += 'mock-engine-coverage'
+    } else {
+        Write-Output "engine corpus   : $engineRan engine-gated tests executed"
+    }
+}
 
 $c = Invoke-Gate -Name 'it' -CargoArgs @('test', '-p', 'sandtree-integration-tests', '--offline')
 if ($c -ne 0) { $failures += 'it' }
@@ -215,19 +253,40 @@ $listed = @(Get-Content $inventory -Encoding utf8 | Where-Object { $_ -match ':\
 $doctests = @($listed | Where-Object { $_ -match '\s-\s' }).Count
 $owned = $listed.Count - $doctests
 
+# `--list` on the default feature set omits every feature-gated test, so the
+# inventory above is a *subset* of what the workspace owns. The `engine` corpus
+# was invisible to this check for exactly that reason: seven red tests, and a
+# coverage report that said everything the workspace owns was covered. List the
+# engine feature set too and add the difference.
+$engineInventory = Join-Path $RunDir 'inventory-engine.log'
+& cargo test --workspace --offline --features sandtree-mock-wasm-components/engine -- --list *>&1 |
+    Out-File -FilePath $engineInventory -Encoding utf8
+$engineListed = @(Get-Content $engineInventory -Encoding utf8 | Where-Object { $_ -match ':\s+test$' })
+$engineDoctests = @($engineListed | Where-Object { $_ -match '\s-\s' }).Count
+$engineOwned = $engineListed.Count - $engineDoctests
+$engineOnly = [Math]::Max(0, $engineOwned - $owned)
+
 $executed = 0
-foreach ($gate in @('contract', 'ut', 'mock', 'it', 'st', 'uat', 'git-channel', 'mcp-channel')) {
+foreach ($gate in @('contract', 'ut', 'mock', 'mock-engine', 'it', 'st', 'uat', 'git-channel', 'mcp-channel')) {
     $log = Join-Path $RunDir "$gate.log"
     if (-not (Test-Path $log)) { continue }
     $n = (Select-String -Path $log -Pattern '^test result: ok\. (\d+) passed' |
           ForEach-Object { [int]$_.Matches[0].Groups[1].Value } | Measure-Object -Sum).Sum
     if ($n) { $executed += $n }
 }
+$ownedTotal = $owned + $engineOnly
 
-Write-Output ("workspace owns : {0} tests ({1} doc-tests excluded)" -f $owned, $doctests)
+Write-Output ("workspace owns : {0} tests ({1} doc-tests excluded)" -f $ownedTotal, $doctests)
+if ($engineOnly -gt 0) {
+    # Single-quoted body with a separate interpolated head: a backtick inside a
+    # double-quoted PowerShell string escapes whatever follows it, and a trailing
+    # backtick swallows the closing quote -- which parses as an unterminated
+    # string much further down the file, far from the line that caused it.
+    Write-Output ("                 of which {0} are feature-gated and invisible to a default --list" -f $engineOnly)
+}
 Write-Output ("gates executed  : {0} tests" -f $executed)
-if ($executed -lt $owned) {
-    $gap = $owned - $executed
+if ($executed -lt $ownedTotal) {
+    $gap = $ownedTotal - $executed
     Write-Output ''
     Write-Output "COVERAGE GAP    : $gap test(s) the workspace owns are not run by any gate."
     Write-Output '                  A gate that does not cover a package looks exactly like a'

@@ -285,7 +285,7 @@ supervisor 是完整且被测试的，却**在产品上不可达**。本轮：
 
 `traceability/requirements_to_tests.csv` 记录 FR/NFR → 测试 ID 映射；
 新增实现必须补一行映射，并在代码中以 `// FR-xxx` / `// NFR-xx` 标注落点。
-## 7.2 WIT `resource-provider` 适配：已实现，但端到端未覆盖（2026-10-08）
+## 7.2 WIT `resource-provider` 适配：端到端已打通（2026-10-08，ADR-017）
 
 `ComponentGeneration` 此前只实现 `GenerationRuntime`：绑定了 `provider-plugin` world，
 却**一次都没调用过** `resource-provider` 导出。一个 WASM 组件因此能被 stage、能过
@@ -295,26 +295,39 @@ health、能参与热插拔，但**不能为 kernel 服务任何 provider 流量
 `Worker::load` 按 manifest 的 `kind` 把 resource port 挂进 `LoadedGeneration`，
 `kind=Provider` 的组件从此对 kernel 可路由。
 
-**但「WASM 组件能真正当 provider」这件事没有被证明。** 本仓不存在一个能编译并绑定的
-`provider-plugin` 组件，而造一个需要 component-model ABI 精度：
+### 造出了一个真能跑起来的组件
 
-- 现有 fixture `mock/wasm-components/fixtures/valid_provider_component.wat` 编译失败于
-  `instance not valid to be used as export`；
-- 该 fixture 文档里写的病因（命名类型导出的身份别名）**经实测是错的**：去掉顶层类型导出
-  复现同一个错误，而其推论出的解法 `(alias outer ...)` 在 component 类型位置根本不解析
-  （`outer` 是 core alias kind）。已把该文档改成记录「病因未定」与两次否证过程。
+原先的 fixture 编译不过。逐签名二分定下 canonical ABI 的三条规则（见 ADR-017）：
+接口实例必须导出自己签名用到的类型；**返回区指针是 core 函数的 `i32` 返回值而不是额外参数**
+（`canon lift` 由 guest 分配并返回地址，`canon lower` 才由 host 传入）；unit ok-payload 不让
+`result` 变便宜。此前记在 fixture 文档里的病因（「命名类型身份别名」）是错的，已按实测推翻。
 
-已覆盖 / 未覆盖，界线很清楚：
+五个 fixture 现由 `mock/scripts/gen_fixtures.ps1` 从同一模板生成，派生件之间只有导出块不同。
+fixture 内嵌的 JSON 由测试对照产品 DTO 的 serde 输出校验，DTO 一改即红并指向重新生成命令。
 
-| 部分 | 状态 |
-| --- | --- |
-| `decode` 契约（guest 返回垃圾 → typed error，绝不折叠成空批次） | ✅ 3 条单测 |
-| `ResourceNode` / `OperationOutcome` 不可 `Default` | ✅ 编译期结构保证：想写「失败即默认值」过不了编译 |
-| `discover` / `inspect` / `invoke` 把 decode 错误传播出去 | ❌ **无覆盖**——需要一个能绑定的组件 |
+### 「未覆盖」那一格现在有证据了
 
-第三行是刻意的诚实标注。已验证：把 `discover` 改成 `.or_else(|_| Ok(DiscoverBatch::default()))`
-后，现有单测**仍然全绿**——因为它们直接测 `decode`，没有一条驱动 `discover`。测试的覆盖面
-没有跟着改动走，这里不能算「已验证」。
+`mock/wasm-components/tests/provider_binding.rs` 驱动真实 guest：descriptor、七个 lifecycle
+调用、discover、inspect、invoke 全部走一遍完整的 compile → instantiate → bind → call 路径。
+`decode` 的传播断言不再需要构造——fixture 返回的 JSON 就是 DTO 的 serde 输出，解不开就会红。
+另有一条断言「装不上的组件在服务任何东西之前就被拒」。
 
-**解阻条件**：一个能编译的 `provider-plugin` 组件。有了它，`discover` 的传播断言才能写，
-WASM provider 路径才算端到端可用。
+### 顺带查出的三个缺陷：都是「从来没被编译过」
+
+让 `wasmtime-abi` 第一次真正参与编译，暴露出三个此前不存在的缺陷：
+
+1. **`ComponentGeneration::load` 在 arm 之前就调 guest** → `wasm trap: interrupt`，
+   **任何组件都装不上**。`epoch_interruption` 下 store 的 epoch deadline 初值为 0，
+   未 arm 的调用在 guest 跑第一条指令前就被打断。已拆出 `arm_with(limits, store)`，
+   `load` 在构造 `Self` 之前用同一份预算 arm 一次。
+2. **`Worker::load` 编译不过**（`Arc<LoadedGeneration>` 缺 `clone`、未包 `Arc`、
+   `Arc<ComponentGeneration>` 未转型成 `Arc<dyn ResourceProvider>`）。插件加载通道在
+   `wasmtime-abi` 下从未构建成功。
+3. **`Component::serialize()` 产出的是原生目标文件**（本机 `\x7fELF` 开头），不是 component
+   二进制；喂回 `Component::new` 会报 `input bytes aren't valid utf-8`——读起来像文本解析问题，
+   其实不是。取字节要用 `wat::parse_str`。
+
+根因是结构性的：`cargo test/clippy --workspace` 不启用 non-default feature，
+而回归脚本用 `cargo test --list` 统计覆盖率时，**该命令只列出已编译的测试**，
+量具的输入集本身就漏掉了 feature-gated 的部分。修法见 ADR-017 与 `AGENTS.md`：
+门禁加 `--all-features`，新增 `mock-engine` gate 并断言它至少跑了 1 条。

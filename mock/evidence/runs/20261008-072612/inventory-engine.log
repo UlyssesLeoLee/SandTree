@@ -1,0 +1,1334 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.50s
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_cli-91dfd25fbccf8090.exe)
+tests::a_failed_response_renders_the_stable_code: test
+tests::a_filter_option_without_a_value_is_an_error: test
+tests::a_successful_response_renders_pretty_json: test
+tests::an_unknown_command_or_option_is_rejected: test
+tests::every_command_maps_to_a_declared_method: test
+tests::force_never_reaches_the_wire_implicitly: test
+tests::help_has_no_method: test
+tests::help_mentions_the_confirmation_requirement: test
+tests::invoke_is_not_forced_unless_the_flag_is_present: test
+tests::no_arguments_prints_help: test
+tests::show_requires_an_id: test
+tests::the_help_text_says_how_to_ask_for_the_version: test
+tests::the_version_is_the_workspace_version: test
+tests::tree_parses_filters: test
+
+14 tests, 0 benchmarks
+     Running unittests src\main.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree-e6d32779d5f27a17.exe)
+0 tests, 0 benchmarks
+     Running tests\invariants.rs (E:\DevCache\cargo\target-dev\debug\deps\invariants-0c65d67360740075.exe)
+every_must_row_in_the_technology_baseline_is_rust_facing: test
+every_network_channel_plugin_goes_through_the_acquisition_gate: test
+only_test_targets_depend_on_the_mock_crates: test
+relation_kinds_are_all_representable_in_the_frozen_model: test
+the_microkernel_crates_declare_no_provider_sdk: test
+the_microkernel_crates_reach_no_provider_crate: test
+the_network_trust_ceiling_is_defined_in_exactly_one_place: test
+
+7 tests, 0 benchmarks
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-240a0cf278c0f725.exe)
+ddl::the_ddl_still_declares_the_tables_the_code_queries: test
+ddl::the_shipped_ddl_applies_to_an_empty_database: test
+error_codes::category_prefixes_match_the_declared_category: test
+error_codes::every_registered_code_is_implemented: test
+error_codes::every_shipped_code_is_in_the_frozen_registry: test
+error_codes::observation_codes_match_their_own_registry: test
+error_codes::retryable_flags_in_the_csv_match_the_implementation: test
+error_codes::the_csv_is_well_formed: test
+error_codes::the_two_registries_do_not_overlap: test
+manifest_schema::every_required_field_in_the_schema_is_required_by_the_parser: test
+manifest_schema::the_plugin_id_pattern_in_the_schema_is_what_the_parser_enforces: test
+manifest_schema::the_schema_pins_the_version_the_code_accepts: test
+observation_model::every_observation_domain_has_a_wire_name_and_a_budget: test
+observation_model::observation_mode_wire_names_round_trip: test
+observation_model::only_host_native_is_security_authoritative: test
+observation_model::trust_levels_never_rise_under_comparison: test
+resource_model::resource_kind_wire_names_are_unique_and_snake_case: test
+resource_model::state_and_relation_wire_names_round_trip: test
+wit::the_both_worlds_keep_their_declared_names: test
+wit::the_host_accepts_its_own_wit_and_refuses_the_other: test
+wit::the_lifecycle_interface_still_exposes_every_designed_call: test
+wit::the_shipped_constants_match_the_frozen_files: test
+workspace_uri::a_foreign_scheme_is_refused: test
+workspace_uri::the_uri_scheme_is_stable: test
+
+24 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_daemon-0cae2bff4bdb2ab2.exe)
+events::tests::a_durable_write_failure_does_not_stop_delivery: test
+events::tests::a_skipped_event_is_still_delivered_live: test
+events::tests::audit_and_error_events_are_durable: test
+events::tests::emitting_records_the_durable_count_and_publishes: test
+events::tests::heartbeats_are_never_durable: test
+events::tests::informational_events_are_still_durable: test
+events::tests::purge_reports_how_many_rows_went_away: test
+methods::tests::a_kind_filter_ignores_unknown_kinds_rather_than_failing: test
+methods::tests::a_malformed_plugin_id_is_rejected_before_it_reaches_the_host: test
+methods::tests::a_malformed_resource_id_is_rejected_before_the_store: test
+methods::tests::a_missing_parameter_is_a_typed_client_error: test
+methods::tests::a_second_daemon_shares_no_state_with_the_first: test
+methods::tests::an_unknown_operation_name_is_rejected: test
+methods::tests::every_declared_method_is_routed: test
+methods::tests::observation_domains_are_validated_by_name: test
+methods::tests::read_methods_answer_on_an_empty_system: test
+methods::tests::the_plugin_lifecycle_endpoints_are_reachable_not_merely_declared: test
+methods::tests::the_version_method_reports_the_crate_version: test
+plugins::tests::a_plugin_manifest_is_still_the_only_way_to_name_a_package: test
+plugins::tests::a_refused_swap_leaves_the_reserve_untouched: test
+plugins::tests::a_rollback_can_itself_be_rolled_back: test
+plugins::tests::a_swap_of_an_uninstalled_plugin_is_a_client_error: test
+plugins::tests::an_install_that_cannot_stage_routes_nothing: test
+plugins::tests::control_is_debug_without_a_wasm_engine: test
+plugins::tests::disable_drops_the_rollback_reserve: test
+plugins::tests::disable_stops_routing_and_reports_whether_anything_was_live: test
+plugins::tests::generations_advance_on_every_swap: test
+plugins::tests::install_stages_then_publishes: test
+plugins::tests::installing_over_a_live_plugin_is_refused_and_names_the_right_method: test
+plugins::tests::rollback_returns_to_the_previous_generation: test
+plugins::tests::rollback_with_nothing_in_reserve_is_a_refusal_not_a_reinstall: test
+plugins::tests::the_default_loader_refuses_rather_than_pretending: test
+tests::every_known_method_has_a_handler: test
+tests::methods_are_registered_in_sorted_order: test
+tests::reconcile_on_an_empty_system_succeeds_and_removes_nothing: test
+tests::shutdown_is_idempotent: test
+tests::the_daemon_boots_without_any_provider_present: test
+tests::the_default_data_dir_is_absolute_and_version_free: test
+tests::the_event_router_is_shared_with_the_kernel: test
+
+39 tests, 0 benchmarks
+     Running unittests src\main.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_daemon-9af17322d2bda433.exe)
+0 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_event-006c427da9a746b1.exe)
+router::tests::audit_events_are_never_coalesced_away: test
+router::tests::dropping_a_subscription_unregisters_it: test
+router::tests::events_reach_matching_subscribers: test
+router::tests::filter_matches_by_type_resource_and_severity: test
+router::tests::non_matching_subscribers_do_not_receive: test
+router::tests::publish_after_close_is_safe: test
+router::tests::publish_batch_returns_one_outcome_per_event: test
+router::tests::slow_subscriber_does_not_grow_without_bound: test
+
+8 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_feature_compose-bdc5e6054f4f3063.exe)
+cli::tests::a_compose_file_is_included_before_the_project_name: test
+cli::tests::a_custom_binary_is_used_verbatim: test
+cli::tests::a_non_zero_exit_becomes_a_failed_error_carrying_stderr: test
+cli::tests::a_present_cli_reports_its_version: test
+cli::tests::an_absent_cli_is_reported_rather_than_assumed: test
+cli::tests::argv_has_the_expected_shape: test
+cli::tests::check_exit_accepts_zero: test
+cli::tests::compose_error_codes_stay_on_the_stable_sandbox_registry: test
+cli::tests::every_command_renders_as_its_subcommand: test
+cli::tests::only_down_is_destructive: test
+cli::tests::operation_kinds_map_to_the_expected_commands: test
+cli::tests::running_with_a_present_cli_records_the_argv: test
+cli::tests::running_with_an_absent_cli_is_an_error_not_an_empty_success: test
+cli::tests::the_command_table_is_the_full_set_and_unique: test
+cli::tests::unmapped_operation_kinds_have_no_command: test
+project::tests::a_fully_stopped_project_is_stopped_not_empty: test
+project::tests::a_mixed_project_is_partial: test
+project::tests::a_node_without_compose_labels_is_not_compose: test
+project::tests::a_project_label_without_a_service_label_is_rejected: test
+project::tests::a_project_whose_only_service_is_partial_is_partial_not_stopped: test
+project::tests::a_service_with_one_running_and_one_stopped_replica_is_partial: test
+project::tests::a_single_running_container_makes_the_project_running: test
+project::tests::a_unanimously_running_project_is_running: test
+project::tests::a_unanimously_stopped_project_is_stopped: test
+project::tests::aggregation_is_deterministic_across_input_orderings: test
+project::tests::an_empty_input_aggregates_to_nothing: test
+project::tests::an_empty_service_list_folds_to_empty: test
+project::tests::compose_labels_are_read_from_metadata_alone: test
+project::tests::container_ids_within_a_service_are_sorted: test
+project::tests::creating_counts_as_running: test
+project::tests::ids_are_stable_and_distinct: test
+project::tests::paused_and_exited_do_not_count_as_running: test
+project::tests::projects_come_back_in_sorted_order: test
+project::tests::replicas_of_one_service_fold_to_running: test
+project::tests::services_come_back_in_sorted_order: test
+project::tests::status_wire_names_are_distinct: test
+provider::tests::a_compose_file_argument_is_forwarded: test
+provider::tests::a_destructive_down_requires_force: test
+provider::tests::a_destructive_down_runs_once_forced: test
+provider::tests::a_failing_compose_cli_surfaces_its_exit_code: test
+provider::tests::a_lifecycle_op_without_a_cli_is_refused: test
+provider::tests::a_non_destructive_op_does_not_need_force: test
+provider::tests::a_non_destructive_op_runs_the_compose_cli: test
+provider::tests::a_plain_container_is_not_a_compose_container: test
+provider::tests::a_present_cli_means_healthy: test
+provider::tests::an_absent_cli_degrades_but_does_not_disappear: test
+provider::tests::an_absent_cli_never_records_an_invocation: test
+provider::tests::an_unmapped_operation_kind_is_refused: test
+provider::tests::compose_containers_are_extracted_from_discovered_nodes: test
+provider::tests::degraded_health_still_permits_control_to_be_attempted: test
+provider::tests::inspect_finds_a_discovered_project: test
+provider::tests::inspect_reports_not_found_for_an_unknown_project: test
+provider::tests::observation_of_an_unknown_project_is_empty_not_an_error: test
+provider::tests::observation_reports_the_aggregate_project_status: test
+provider::tests::observation_warns_instead_of_fabricating_other_domains: test
+provider::tests::project_nodes_do_not_invent_a_lifecycle_state: test
+provider::tests::project_nodes_record_the_service_map: test
+provider::tests::projects_are_discovered_sorted_with_aggregate_status: test
+provider::tests::shutdown_is_idempotent_and_leaves_discovery_working: test
+provider::tests::the_descriptor_declares_a_feature_plugin: test
+tests::plugin_id_is_the_reverse_domain_design_specifies: test
+tests::provider_version_is_the_crate_version: test
+tests::the_compose_label_prefix_matches_the_docker_provider: test
+
+63 tests, 0 benchmarks
+     Running tests\discovery.rs (E:\DevCache\cargo\target-dev\debug\deps\discovery-285f1e619979d894.exe)
+a_second_scan_of_an_unchanged_provider_changes_nothing: test
+relations_that_span_a_page_boundary_are_still_written: test
+
+2 tests, 0 benchmarks
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-11ceaf5851df6f2b.exe)
+control_plane::a_finished_operation_is_persisted_with_its_terminal_state: test
+control_plane::a_provider_failure_keeps_its_stable_code: test
+control_plane::an_ungranted_operation_never_reaches_the_provider: test
+control_plane::destroy_without_force_is_refused_and_audited_as_a_refusal: test
+discovery_flow::a_two_hundred_resource_scan_is_fast: test
+discovery_flow::one_broken_provider_does_not_hide_a_healthy_one: test
+hot_swap_flow::a_failed_upgrade_never_takes_the_route_down: test
+hot_swap_flow::a_state_schema_downgrade_keeps_the_old_generation: test
+ipc_surface::an_unimplemented_method_says_so_explicitly: test
+ipc_surface::malformed_parameters_are_rejected_before_any_state_change: test
+ipc_surface::the_daemon_has_no_unrouted_methods: test
+observation_plane::a_degraded_observation_plane_yields_an_unavailable_snapshot: test
+observation_plane::losing_observation_leaves_the_control_plane_intact: test
+observation_plane::probe_data_never_arrives_as_host_native: test
+
+14 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_ipc-7612b2e6aa12d528.exe)
+framing::tests::a_maximum_size_frame_is_accepted: test
+framing::tests::a_partial_frame_is_not_an_error: test
+framing::tests::a_stream_without_a_usable_prefix_is_still_bounded: test
+framing::tests::an_oversized_declaration_is_refused_before_buffering: test
+framing::tests::decode_exact_rejects_a_truncated_buffer: test
+framing::tests::decoder_handles_frames_split_across_arbitrary_chunks: test
+framing::tests::decoder_yields_frames_in_order_from_one_push: test
+framing::tests::empty_payload_is_a_valid_frame: test
+framing::tests::little_endian_length_prefix: test
+framing::tests::round_trip: test
+method::tests::all_is_sorted_and_free_of_duplicates: test
+method::tests::every_method_is_well_formed_and_registered_in_all: test
+method::tests::family_splits_on_the_first_dot: test
+method::tests::malformed_names_are_rejected: test
+router::tests::a_handler_error_becomes_a_failed_response: test
+router::tests::an_unknown_method_is_a_typed_error_naming_it: test
+router::tests::contains_reflects_registration: test
+router::tests::dispatch_calls_the_registered_handler: test
+router::tests::methods_are_listed_in_sorted_order: test
+router::tests::re_registering_replaces_the_handler: test
+router::tests::the_request_id_is_echoed_on_both_paths: test
+transport::tests::a_scoped_path_cannot_contain_separators: test
+transport::tests::close_is_idempotent: test
+transport::tests::sending_before_connecting_is_an_error_not_a_silent_success: test
+transport::tests::support_matches_the_build_target: test
+transport::tests::the_pipe_name_is_scoped_and_versioned: test
+transport::tests::the_scope_token_cannot_escape_the_pipe_namespace: test
+
+27 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_kernel-2ce0c78a59ee8ee9.exe)
+tests::a_control_only_instance_is_not_an_observation_instance: test
+tests::a_destructive_operation_without_force_is_refused_before_dispatch: test
+tests::a_forced_destructive_operation_reaches_the_provider: test
+tests::a_healthy_provider_that_stops_reporting_marks_resources_missing: test
+tests::a_long_grace_period_never_removes: test
+tests::a_provider_failure_is_recorded_and_returned_not_swallowed: test
+tests::a_provider_with_an_endless_cursor_is_cut_off: test
+tests::a_recovered_resource_clears_its_missing_clock: test
+tests::a_resource_whose_parent_is_filtered_out_is_still_visible: test
+tests::an_unavailable_provider_does_not_age_out_its_resources: test
+tests::an_ungranted_capability_is_refused: test
+tests::bootstrap_creates_a_usable_store_and_starts_empty: test
+tests::discover_merges_provider_resources: test
+tests::observation_without_a_provider_is_a_typed_error_not_absence: test
+tests::router_type_is_in_scope: test
+tests::shutdown_releases_every_provider: test
+tests::the_diagnostics_bundle_is_redacted_and_deterministic: test
+tests::the_event_router_is_available_immediately: test
+tests::the_grace_period_delays_removal_and_then_allows_it: test
+
+19 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_observation-0772e8a20705bea9.exe)
+fault::tests::codes_come_from_the_registry_and_match_the_table: test
+fault::tests::only_partial_coverage_withholds_specific_domains: test
+fault::tests::only_protocol_and_security_faults_surface: test
+fault::tests::surfaced_errors_keep_detail_out_of_the_message: test
+fault::tests::warnings_lead_with_the_stable_code: test
+fixture::tests::a_default_resource_is_valid_and_metadata_only: test
+fixture::tests::a_fixture_round_trips_through_json_unchanged: test
+fixture::tests::a_mode_restriction_must_be_a_subset: test
+fixture::tests::a_partial_coverage_fault_may_withhold_a_domain: test
+fixture::tests::a_resource_without_modes_is_refused: test
+fixture::tests::a_stale_resource_must_declare_an_age: test
+fixture::tests::a_wrong_schema_tag_is_refused: test
+fixture::tests::an_empty_source_is_refused: test
+fixture::tests::an_unparsable_timestamp_is_refused: test
+fixture::tests::an_unsorted_domain_list_is_refused: test
+fixture::tests::disposition_defaults_to_the_fault_policy: test
+fixture::tests::identity_is_derived_from_the_parts: test
+fixture::tests::malformed_json_is_reported_as_such: test
+fixture::tests::resource_ids_are_sorted_and_deduplicated: test
+fixture::tests::values_must_exist_for_every_declared_domain: test
+provider::tests::an_unscripted_resource_is_a_mock_fact_not_a_host_claim: test
+provider::tests::capabilities_declare_a_native_credential_requirement: test
+provider::tests::health_follows_coverage_then_the_declared_state: test
+provider::tests::picks_the_least_invasive_mode_that_can_serve_the_request: test
+provider::tests::select_mode_follows_the_priority_order: test
+trust::tests::a_declared_ceiling_can_only_narrow: test
+trust::tests::a_permitted_request_is_left_alone: test
+trust::tests::an_implied_ceiling_is_neither_refusal_nor_downgrade: test
+trust::tests::derived_ord_is_the_inverse_of_rank: test
+trust::tests::guest_probe_is_never_promoted_by_resolution: test
+trust::tests::mode_ceilings_match_the_design_table: test
+trust::tests::refusal_warning_names_requested_and_effective: test
+trust::tests::the_ceiling_bound_holds_for_every_pair: test
+
+33 tests, 0 benchmarks
+     Running tests\adr_obs_001.rs (E:\DevCache\cargo\target-dev\debug\deps\adr_obs_001-bae7a7a879785061.exe)
+a_dead_channel_reports_no_trust_at_all: test
+a_declared_and_derived_degradation_agree: test
+a_declared_degraded_channel_stays_degraded_with_complete_coverage: test
+a_degraded_observation_plane_yields_an_unavailable_snapshot: test
+a_disposition_override_can_force_the_error_branch: test
+a_request_no_mode_can_serve_is_a_typed_no_strategy_error: test
+an_observation_failure_never_removes_the_resource: test
+an_unscripted_resource_does_not_claim_the_resource_is_absent: test
+every_degradable_fault_yields_a_snapshot_rather_than_an_error: test
+partial_coverage_keeps_the_domains_that_did_arrive: test
+protocol_and_security_faults_surface_and_are_auditable: test
+the_metadata_floor_stays_available_while_the_rich_mode_is_down: test
+
+12 tests, 0 benchmarks
+     Running tests\adr_obs_003.rs (E:\DevCache\cargo\target-dev\debug\deps\adr_obs_003-2bf688bd2eaf775c.exe)
+a_declared_ceiling_above_the_mode_ceiling_is_refused: test
+a_degraded_snapshot_does_not_invent_a_trust_claim: test
+a_fault_does_not_open_a_trust_side_channel: test
+a_refused_upgrade_is_reported_on_the_snapshot: test
+a_verified_evidence_hash_does_not_promote_guest_probe: test
+no_mode_trust_health_combination_can_exceed_its_ceiling: test
+no_probe_snapshot_in_the_corpus_is_security_authoritative: test
+only_metadata_mode_may_report_host_native: test
+the_corpus_attack_fixtures_stay_below_their_ceiling: test
+
+9 tests, 0 benchmarks
+     Running tests\faults.rs (E:\DevCache\cargo\target-dev\debug\deps\faults-f2c3cde3a3002f2b.exe)
+a_denied_credential_is_declared_in_the_capabilities: test
+a_guest_path_escape_is_refused_and_named: test
+a_nested_engine_outage_marks_docker_partial_not_absent: test
+a_probe_bootstrap_failure_reports_the_channel_down: test
+an_invalid_envelope_surfaces_with_audit_detail: test
+deadline_exceeded_is_a_retryable_unavailable_snapshot: test
+disposition_overrides_are_honoured_in_both_directions: test
+partial_coverage_has_no_error_code_and_keeps_the_rest: test
+the_corpus_exercises_every_fault_kind: test
+the_scenario_corpus_matches_its_documented_behaviour: test
+
+10 tests, 0 benchmarks
+     Running tests\fixture_corpus.rs (E:\DevCache\cargo\target-dev\debug\deps\fixture_corpus-036f1648f445e5a4.exe)
+every_shipped_fixture_loads_and_validates: test
+no_fixture_carries_a_host_path_or_a_credential: test
+the_corpus_covers_every_mode_health_and_trust_rung: test
+the_corpus_ships_exactly_one_path_escape_fixture: test
+the_hygiene_scanner_detects_what_it_claims_to: test
+
+5 tests, 0 benchmarks
+     Running tests\matrix.rs (E:\DevCache\cargo\target-dev\debug\deps\matrix-3e07530fb6232726.exe)
+a_missing_deadline_falls_back_to_the_domain_budget: test
+a_snapshot_carries_only_the_declared_dto_fields: test
+a_snapshot_round_trips_through_json: test
+an_unservable_requested_domain_degrades_the_snapshot: test
+capabilities_are_ordered_and_never_speculate: test
+health_is_a_function_of_the_fixture_not_of_call_order: test
+repeated_observation_is_stable: test
+the_health_domain_reports_mode_deadline_and_served_domains: test
+the_same_fixture_yields_identical_snapshots: test
+the_whole_corpus_observes_deterministically: test
+values_serialise_in_sorted_domain_order: test
+warnings_are_deduplicated_and_stable: test
+
+12 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_runtime-5bbab5c413c170bd.exe)
+fixture::tests::enum_fields_accept_both_wire_spellings: test
+fixture::tests::error_codes_must_come_from_the_shipped_registry: test
+fixture::tests::fixture_round_trips_through_json: test
+fixture::tests::missing_file_is_reported_as_io_error: test
+fixture::tests::operation_kinds_must_be_real: test
+fixture::tests::relation_kind_accepts_both_spellings_and_rejects_rubbish: test
+fixture::tests::unknown_enum_values_are_rejected_not_defaulted: test
+
+7 tests, 0 benchmarks
+     Running tests\determinism.rs (E:\DevCache\cargo\target-dev\debug\deps\determinism-b902abbe36bfebd3.exe)
+a_cursor_that_does_not_advance_terminates_the_scan: test
+a_fresh_scan_reproduces_the_fixture_exactly: test
+a_provider_that_cycles_between_two_cursors_is_stopped: test
+a_provider_that_ends_its_cursor_chain_terminates_the_scan: test
+a_provider_that_fails_mid_scan_keeps_its_earlier_pages: test
+an_empty_provider_list_scans_to_nothing: test
+an_unavailable_provider_fails_every_call_but_still_reports_health: test
+discover_all_is_byte_identical_no_matter_what_was_invoked_first: test
+the_scan_is_reproducible_across_tokio_worker_threads: test
+two_worlds_built_from_the_same_json_agree_byte_for_byte: test
+
+10 tests, 0 benchmarks
+     Running tests\ports.rs (E:\DevCache\cargo\target-dev\debug\deps\ports-0f86ffacbeea234f.exe)
+a_caller_cannot_express_a_traversal_at_all: test
+a_write_follows_a_symlink_to_its_resolved_target: test
+a_write_is_visible_to_a_later_read_and_stat: test
+a_write_through_an_escaping_symlink_is_refused_and_writes_nothing: test
+a_write_whose_parent_does_not_exist_is_refused: test
+discover_pages_until_the_cursor_runs_out: test
+every_file_call_on_an_unavailable_provider_fails: test
+exec_on_an_unknown_resource_is_not_found: test
+exec_output_longer_than_the_cap_comes_back_truncated: test
+exec_refuses_a_zero_budget_and_an_uncovered_command: test
+exec_returns_the_scripted_outcome: test
+health_reports_the_state_rather_than_failing_on_it: test
+inspect_returns_the_scripted_node_and_refuses_an_unknown_id: test
+list_returns_one_level_of_metadata_and_never_a_body: test
+listing_a_file_or_a_missing_path_is_an_error: test
+read_returns_exactly_the_requested_window: test
+reading_a_directory_is_refused: test
+reading_a_metadata_only_file_is_an_error_not_empty_bytes: test
+shutdown_is_idempotent_and_leaves_discovery_untouched: test
+the_fake_refuses_what_the_kernel_refuses: test
+writing_to_a_read_only_directory_is_refused: test
+
+21 tests, 0 benchmarks
+     Running tests\world.rs (E:\DevCache\cargo\target-dev\debug\deps\world-04cdf95c6170fe99.exe)
+a_canonical_path_outside_the_served_subtree_is_still_refused: test
+a_cursor_outside_the_world_is_refused_rather_than_answered_empty: test
+a_dangling_parent_and_a_parent_cycle_are_both_refused: test
+a_declared_capability_still_does_not_invent_an_outcome: test
+a_destructive_operation_without_force_is_refused_at_the_provider_boundary: test
+a_destructive_refusal_comes_before_the_resource_lookup: test
+a_read_only_ancestor_is_visible_through_the_whole_subtree: test
+a_relation_rides_with_the_page_holding_its_source: test
+a_repeated_key_and_a_repeated_identity_are_different_mistakes: test
+a_resource_declared_capability_set_is_a_ceiling: test
+a_symlink_inside_the_subtree_resolves_to_its_target: test
+a_symlink_loop_is_refused_rather_than_followed_forever: test
+a_symlink_out_of_the_workspace_root_is_refused: test
+an_empty_capability_list_means_no_declared_ceiling: test
+an_empty_plugin_name_is_refused: test
+an_exec_rule_must_declare_an_argv_and_a_known_resource: test
+an_unavailable_provider_reports_health_and_fails_every_other_call: test
+an_unavailable_provider_without_a_scripted_code_still_fails_closed: test
+an_undeclared_resource_is_reachable_by_no_rule_at_all: test
+an_unrecognised_schema_version_is_refused: test
+an_unscripted_operation_is_an_error_rather_than_a_silent_success: test
+both_shapes_of_operation_failure_are_reproduced: test
+contradictory_file_declarations_are_refused: test
+error_codes_must_exist_in_the_shipped_registry: test
+every_built_in_world_loads_and_declares_what_it_promises: test
+exec_can_script_a_hard_failure: test
+exec_output_is_capped_and_the_truncation_is_reported: test
+exec_refuses_a_zero_budget_and_an_unscripted_command: test
+exec_rules_match_exact_argv_and_may_be_scoped_to_a_resource: test
+fault_mode_3_delivers_the_earlier_pages_then_fails: test
+file_entries_must_declare_a_real_parent_directory: test
+fixture_declaration_order_does_not_change_the_serialized_world: test
+identity_is_derived_from_native_parts_not_from_the_display_name: test
+invoking_on_a_resource_the_fixture_never_declared_is_not_found: test
+operation_outcomes_must_be_terminal_and_carry_codes_only_on_failure: test
+pagination_delivers_every_resource_exactly_once: test
+relations_must_name_declared_resources: test
+resource_metadata_and_capabilities_survive_loading: test
+resources_are_emitted_parent_first_with_siblings_in_derived_id_order: test
+the_descriptor_reports_the_fixture_and_a_default_version: test
+
+40 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_wasm_components-6c98bcc8d93dafee.exe)
+engine::tests::compiled_bytes_round_trip_through_the_binary_format: test
+engine::tests::compiled_exports_are_exactly_what_the_manifest_claims: test
+engine::tests::every_fixture_is_a_real_component: test
+engine::tests::every_reject_fixture_really_is_rejected_before_binding: test
+engine::tests::no_fixture_imports_anything_from_the_host: test
+engine::tests::no_fixture_is_marked_blocked_any_more: test
+engine::tests::the_valid_fixture_compiles: test
+tests::derived_fixtures_differ_from_the_valid_one_only_where_intended: test
+tests::every_expected_code_exists_in_the_shipped_error_registry: test
+tests::every_fixture_has_a_manifest_entry_and_the_reverse: test
+tests::every_reject_fixture_reports_a_distinct_cause: test
+tests::fixture_names_and_files_are_unique: test
+tests::interface_names_derive_back_to_the_declared_package: test
+tests::manifest_and_code_agree_on_every_outcome: test
+tests::manifest_export_lists_match_the_code: test
+tests::manifest_paths_and_constants_resolve: test
+tests::no_sandtree_exports_fixture_is_a_standalone_component: test
+tests::only_the_valid_fixture_is_expected_to_load: test
+tests::reject_fixtures_drop_exactly_the_interface_they_are_about: test
+tests::the_valid_fixture_exports_both_required_interfaces: test
+wit_equivalence::tests::both_wit_files_declare_the_package_the_fixtures_use: test
+wit_equivalence::tests::the_corpus_implements_exactly_the_declared_world: test
+wit_equivalence::tests::the_interface_export_names_match_the_wit_identity: test
+wit_equivalence::tests::the_rename_is_the_only_difference_and_it_is_real: test
+wit_equivalence::tests::wit_copy_matches_design_file_modulo_the_rename: test
+
+25 tests, 0 benchmarks
+     Running tests\provider_binding.rs (E:\DevCache\cargo\target-dev\debug\deps\provider_binding-37601afff9c257d4.exe)
+a_component_that_cannot_bind_is_rejected_before_it_serves_anything: test
+a_discovered_page_is_followable_to_completion: test
+discover_returns_the_batch_the_guest_actually_embedded: test
+every_lifecycle_call_round_trips_through_the_canonical_abi: test
+inspect_returns_the_node_for_the_requested_id: test
+invoke_returns_the_operation_outcome: test
+the_fixture_reports_the_descriptor_the_host_stores: test
+the_generated_fixture_declares_one_data_segment_per_literal: test
+the_valid_fixture_matches_the_dtos_it_embeds: test
+
+9 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_model-386cd87c226a215b.exe)
+capability::tests::empty_set_denies_everything: test
+capability::tests::intersection_computes_actual_grant: test
+capability::tests::parse_all_namespaces: test
+capability::tests::scope_does_not_cross_component_boundary: test
+capability::tests::scoped_grant_never_covers_unscoped_request: test
+capability::tests::set_allows_uses_any_grant: test
+capability::tests::unknown_namespace_is_rejected: test
+capability::tests::unscoped_grant_covers_any_scope: test
+capability::tests::wire_form_is_sorted_and_round_trips: test
+error::tests::category_uses_the_frozen_long_names: test
+error::tests::error_serializes_with_code_message_detail: test
+error::tests::every_code_is_unique_and_prefixed: test
+error::tests::every_code_matches_the_frozen_csv_category: test
+error::tests::retryable_matches_csv: test
+event::tests::all_event_types_have_names: test
+event::tests::event_carries_correlation_and_resource: test
+event::tests::event_without_resource_omits_field: test
+id::tests::derive_changes_with_provider_native_id: test
+id::tests::derive_ignores_display_name_rename: test
+id::tests::derive_is_stable_for_identical_inputs: test
+id::tests::derived_ids_are_domain_separated: test
+id::tests::ordering_is_stable_for_sorting: test
+id::tests::parse_rejects_wrong_prefix_and_shape: test
+id::tests::parse_round_trips: test
+id::tests::serde_is_transparent_string: test
+operation::tests::destructive_kinds_are_flagged: test
+operation::tests::kind_wire_round_trip: test
+operation::tests::operation_state_wire_round_trip: test
+operation::tests::outcome_serializes_error_code: test
+operation::tests::terminal_states_close_the_job: test
+resource::tests::correlation_serializes_as_plain_string: test
+resource::tests::endpoint_id_recovered_from_metadata: test
+resource::tests::relation_kind_wire_round_trip: test
+resource::tests::resource_node_round_trips: test
+resource::tests::state_wire_names_are_stable: test
+
+35 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_observation_core-ca047288717759bc.exe)
+cache::tests::domains_are_stored_independently: test
+cache::tests::eviction_removes_only_expired_entries: test
+cache::tests::expired_entry_is_downgraded_not_returned_as_healthy: test
+cache::tests::invalidating_a_resource_clears_every_domain: test
+cache::tests::invalidation_is_scoped_to_one_resource: test
+cache::tests::profiles_are_separated: test
+cache::tests::store_and_retrieve_carries_age: test
+limits::tests::deep_nesting_is_rejected_not_truncated: test
+limits::tests::health_reflects_coverage_not_mode: test
+limits::tests::oversized_collection_is_truncated: test
+limits::tests::oversized_domain_is_a_typed_error: test
+limits::tests::oversized_string_is_truncated: test
+limits::tests::partial_values_make_a_fully_covered_snapshot_degraded: test
+limits::tests::per_domain_limits_differ_for_process_lists: test
+limits::tests::plain_payload_passes_through: test
+scheduler::tests::a_refresh_is_executed_and_reused: test
+scheduler::tests::deadline_overrun_becomes_a_typed_error: test
+scheduler::tests::different_domains_do_not_share_a_flight_slot: test
+scheduler::tests::global_concurrency_is_capped: test
+scheduler::tests::invalidation_forces_a_fresh_refresh: test
+scheduler::tests::provider_errors_propagate_untouched: test
+service::tests::collection_failure_degrades_instead_of_erroring: test
+service::tests::collects_then_serves_from_cache: test
+service::tests::forced_request_bypasses_the_cache: test
+service::tests::invalidation_forces_the_next_request_to_collect: test
+service::tests::metadata_only_is_flagged_in_the_snapshot: test
+service::tests::oversized_domain_payload_is_marked_partial: test
+service::tests::partial_coverage_marks_the_snapshot_degraded: test
+service::tests::security_violations_are_never_swallowed: test
+strategy::tests::caps_with_no_declared_domains_fall_back_to_all: test
+strategy::tests::empty_request_means_every_domain: test
+strategy::tests::fallback_chain_explains_every_rejected_mode: test
+strategy::tests::fallback_plan_moves_down_the_chain: test
+strategy::tests::kernel_policy_can_forbid_probe: test
+strategy::tests::limits_come_from_the_requested_domains: test
+strategy::tests::native_wins_when_offered: test
+strategy::tests::no_modes_at_all_is_a_typed_error: test
+strategy::tests::plan_carries_requested_domains_so_gaps_are_visible: test
+strategy::tests::probe_is_used_when_native_is_absent: test
+
+39 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_observation_model-9196ee2aec3a1853.exe)
+tests::capabilities_report_domains_per_mode: test
+tests::empty_snapshot_represents_failure_without_error: test
+tests::evidence_does_not_promote_guest_trust: test
+tests::freshness_defaults_match_design_table: test
+tests::hash_state_ladder: test
+tests::mode_negotiation_order_is_native_exec_probe_metadata: test
+tests::snapshot_reports_missing_and_partial_domains: test
+tests::snapshot_values_are_sorted_for_byte_stability: test
+tests::snapshot_with_guest_probe_is_not_authoritative: test
+tests::trust_ladder_orders_host_above_guest: test
+tests::trust_never_escalates_when_merged: test
+tests::wire_names_match_json_schema_and_wit: test
+
+12 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_plugin_host-5d33eb5e721953f8.exe)
+cluster::tests::a_complete_app_is_published_together: test
+cluster::tests::a_failed_optional_slot_is_dropped_not_fatal: test
+cluster::tests::a_failed_required_slot_publishes_nothing: test
+cluster::tests::a_plugin_in_two_clusters_is_staged_once: test
+cluster::tests::an_app_that_resolves_to_no_plugins_is_refused: test
+cluster::tests::an_app_where_every_slot_is_optional_and_all_fail_is_refused: test
+cluster::tests::an_unannotated_cluster_is_required: test
+cluster::tests::plan_helpers_agree_with_the_entries: test
+cluster::tests::plan_order_is_deterministic_regardless_of_manifest_order: test
+cluster::tests::publishing_the_wrong_number_of_generations_is_refused: test
+cluster::tests::reinstalling_retires_the_generation_it_displaced: test
+cluster::tests::skipped_slots_report_the_manifest_name_not_only_the_hash: test
+cluster::tests::the_whole_app_shares_one_generation_number: test
+engine::tests::a_component_without_the_lifecycle_interface_is_refused: test
+engine::tests::a_malformed_guest_reply_is_a_typed_error_not_an_empty_batch: test
+engine::tests::a_well_formed_reply_decodes_into_the_domain_type: test
+engine::tests::an_uninterpretable_health_status_is_a_failure_not_a_pass: test
+engine::tests::engine_is_built_with_fuel_and_epoch_containment: test
+engine::tests::epoch_tick_interrupts_a_worker_that_missed_its_deadline: test
+engine::tests::fuel_actually_decrements_when_metering_is_on: test
+engine::tests::garbage_bytes_are_rejected_as_an_invalid_component: test
+engine::tests::store_limits_are_attached_to_every_worker: test
+engine::tests::structurally_valid_json_of_the_wrong_shape_is_still_a_failure: test
+engine::tests::wit_copy_matches_design_file: test
+generation::tests::debug_does_not_require_the_runtime_to_be_debug: test
+generation::tests::the_plugin_id_is_rewritten_too: test
+generation::tests::the_ports_generation_is_rewritten_to_the_hosts_authority: test
+generation::tests::the_registry_projection_repeats_the_same_generation: test
+hot_swap::tests::a_generation_displaced_by_a_racing_swap_is_still_retired: test
+hot_swap::tests::a_refused_swap_reports_no_generation_when_nothing_was_serving: test
+hot_swap::tests::accept_failure_keeps_the_old_generation_serving: test
+hot_swap::tests::drain_timeout_does_not_undo_a_healthy_swap: test
+hot_swap::tests::equal_state_schema_is_accepted: test
+hot_swap::tests::happy_path_follows_the_design_order: test
+hot_swap::tests::health_failure_keeps_the_old_generation_serving: test
+hot_swap::tests::init_failure_keeps_the_old_generation_serving: test
+hot_swap::tests::install_of_an_unhealthy_provider_routes_nothing: test
+hot_swap::tests::install_runs_init_and_health_before_routing: test
+hot_swap::tests::migration_reaches_the_generation_the_old_one_was_asked_to_target: test
+hot_swap::tests::now_iso_is_a_usable_timestamp: test
+hot_swap::tests::prepare_failure_never_reaches_accept_or_the_route: test
+hot_swap::tests::retire_of_a_plugin_that_is_not_routed_is_harmless: test
+hot_swap::tests::retire_stops_routing_and_shuts_down: test
+hot_swap::tests::rollback_after_swap_restores_the_previous_generation: test
+hot_swap::tests::state_schema_downgrade_is_refused_before_any_migration: test
+hot_swap::tests::stateless_swap_never_migrates: test
+hot_swap::tests::the_schema_verdict_comes_from_the_generations_not_the_caller: test
+hot_swap::tests::the_supervisor_hands_back_the_retired_generation_for_rollback: test
+limits::tests::any_loosened_field_is_refused: test
+limits::tests::host_ceiling_is_accepted_by_itself: test
+limits::tests::no_configuration_means_the_ceiling: test
+limits::tests::resolve_can_never_produce_a_value_looser_than_the_ceiling: test
+limits::tests::resolve_takes_the_tighter_of_each_field_independently: test
+limits::tests::tightening_a_limit_is_allowed: test
+route::tests::a_generation_can_only_be_routed_for_its_own_plugin: test
+route::tests::lifecycle_only_generations_route_without_any_port: test
+route::tests::outcome_helpers_read_correctly: test
+route::tests::remove_stops_routing: test
+route::tests::rollback_restores_the_previous_generation: test
+route::tests::routes_are_per_plugin: test
+route::tests::swap_is_fast_enough_for_the_requirement: test
+route::tests::swap_returns_the_previous_generation: test
+route::tests::the_ports_bundle_carries_no_port_when_empty: test
+route::tests::the_routed_generation_and_its_instance_are_always_the_same_value: test
+route::tests::unregistered_plugin_has_no_generation: test
+verify::tests::component_is_mandatory_under_the_component_policy: test
+verify::tests::deny_by_default_when_policy_grants_nothing: test
+verify::tests::empty_license_allow_list_defers_to_release_gating: test
+verify::tests::grant_is_the_intersection_not_the_union: test
+verify::tests::in_process_provider_needs_no_component: test
+verify::tests::invalid_manifest_fails_before_capability_math: test
+verify::tests::license_outside_the_allow_list_is_rejected: test
+verify::tests::shipped_bytes_without_a_recorded_hash_are_rejected: test
+verify::tests::wrong_component_package_namespace_is_refused: test
+
+74 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_plugin_worker-9e2e775da43eed61.exe)
+tests::a_malformed_manifest_is_rejected_before_the_file_is_read: test
+tests::a_missing_component_file_is_a_manifest_error: test
+tests::a_worker_starts_idle: test
+tests::initialising_before_loading_is_refused: test
+tests::loading_without_the_abi_feature_refuses_rather_than_faking_it: test
+tests::retiring_an_unloaded_worker_is_a_no_op: test
+tests::the_declared_generation_is_carried_through: test
+tests::verification_precedes_any_component_load: test
+tests::verification_requires_component_bytes: test
+
+9 tests, 0 benchmarks
+     Running unittests src\main.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_plugin_worker-1ecaf1796b72dcec.exe)
+0 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_policy-a4d602d9bf6c2913.exe)
+acquire::tests::a_grant_for_one_endpoint_does_not_authorize_another: test
+acquire::tests::a_permit_does_not_transfer_to_another_channel_or_domain: test
+acquire::tests::a_verdict_judged_for_another_domain_is_not_accepted: test
+acquire::tests::a_well_formed_scope_is_accepted: test
+acquire::tests::a_working_penetration_channel_makes_the_network_channel_inadmissible: test
+acquire::tests::an_empty_scope_is_refused_rather_than_widened_to_a_global_grant: test
+acquire::tests::an_ungranted_endpoint_is_denied_by_default: test
+acquire::tests::channel_wire_names_round_trip: test
+acquire::tests::denials_carry_a_specific_reason_into_the_frozen_error_vocabulary: test
+acquire::tests::every_refusal_reason_is_reachable_and_named: test
+acquire::tests::refused_penetration_admits_the_network_channel: test
+acquire::tests::scope_hygiene_rejects_url_and_credential_shapes: test
+acquire::tests::the_ceiling_cannot_exceed_the_constant_for_any_channel: test
+acquire::tests::the_ceiling_is_guest_probe_and_the_policy_cannot_be_told_otherwise: test
+acquire::tests::the_resource_actually_binds_the_permit: test
+audit::tests::epoch_formats_as_rfc3339: test
+audit::tests::failure_record_carries_error_code: test
+audit::tests::now_ms_is_plausible: test
+audit::tests::result_text_is_redacted_because_it_can_carry_a_command_line: test
+audit::tests::success_record_is_redacted: test
+engine::tests::declared_but_ungranted_is_denied_with_distinct_reason: test
+engine::tests::denial_reason_never_contains_capability_scope_secrets: test
+engine::tests::dump_is_deterministic_and_shows_clipped_grants: test
+engine::tests::explicit_deny_overrides_grant: test
+engine::tests::grant_wider_than_declaration_is_clipped: test
+engine::tests::nothing_is_granted_by_default: test
+engine::tests::require_maps_denial_to_policy_error_code: test
+engine::tests::revoke_removes_the_grant: test
+engine::tests::scoped_grant_applies_to_resource_within_scope_only: test
+redact::tests::arrays_are_walked: test
+redact::tests::bearer_headers_are_masked: test
+redact::tests::deep_nesting_is_rejected_instead_of_overflowing: test
+redact::tests::harmless_text_is_untouched: test
+redact::tests::key_value_secrets_are_masked: test
+redact::tests::nested_secret_values_are_replaced_not_leaked: test
+redact::tests::pem_private_keys_are_removed: test
+redact::tests::secret_key_detection_is_broad: test
+redact::tests::url_userinfo_is_masked: test
+redact::tests::wide_documents_are_bounded: test
+trust::tests::freshness_uses_per_domain_limits: test
+trust::tests::guest_probe_never_passes_even_with_a_verified_hash: test
+trust::tests::host_native_passes_the_destructive_gate: test
+trust::tests::permissive_policy_still_requires_provenance: test
+trust::tests::remote_exec_is_below_the_default_threshold: test
+trust::tests::stale_snapshot_is_rejected_before_trust_is_even_considered: test
+trust::tests::timestamp_parsing_is_correct: test
+trust::tests::unavailable_snapshot_is_not_evidence_of_absence: test
+trust::tests::unparsable_timestamp_is_treated_as_oldest_possible: test
+
+48 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_probe_windows-e2d77b7190978bd8.exe)
+tests::a_failed_publish_writes_no_json: test
+tests::a_foreign_schema_is_rejected: test
+tests::an_envelope_round_trips_through_the_outbox: test
+tests::an_unavailable_probe_says_why: test
+tests::publication_is_atomic_and_leaves_no_partial_json: test
+tests::published_ids_are_sorted: test
+tests::reading_an_unpublished_envelope_is_an_error_not_an_empty_one: test
+tests::the_domain_set_is_fixed_and_always_populated: test
+tests::the_hash_detects_tampering_but_never_raises_trust: test
+tests::the_hash_is_stable_across_field_insertion_order: test
+time::tests::known_instants_format_correctly: test
+time::tests::leap_days_are_handled: test
+time::tests::pre_epoch_instants_stay_valid: test
+
+13 tests, 0 benchmarks
+     Running unittests src\main.rs (E:\DevCache\cargo\target-dev\debug\deps\probe_windows-87617cd9cb2871e8.exe)
+0 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_provider_docker-a0de7c52d6a012f9.exe)
+endpoint::tests::cleartext_tcp_is_rejected_not_downgraded: test
+endpoint::tests::credential_reference_is_stored_not_the_secret: test
+endpoint::tests::distinct_endpoints_get_distinct_ids: test
+endpoint::tests::https_endpoint_is_accepted_and_marked_tls: test
+endpoint::tests::identity_is_stable_and_normalizes_scheme_case: test
+endpoint::tests::invalid_port_and_empty_host_are_distinguished: test
+endpoint::tests::malformed_endpoints_are_rejected: test
+endpoint::tests::parses_default_named_pipe_and_unix_socket: test
+error::tests::io_error_maps_to_retryable_endpoint_code: test
+error::tests::provider_errors_carry_stable_codes: test
+error::tests::server_404_maps_to_conflict_and_keeps_raw_text_in_detail: test
+error::tests::server_409_maps_to_conflict: test
+error::tests::server_4xx_and_5xx_split_into_client_and_transport: test
+host_policy::tests::configured_workspace_roots_are_allowed: test
+host_policy::tests::drive_roots_are_refused_even_if_listed_as_a_root: test
+host_policy::tests::host_docker_socket_is_never_shareable: test
+host_policy::tests::host_network_namespace_is_refused: test
+host_policy::tests::privileged_containers_are_refused: test
+host_policy::tests::sibling_prefix_paths_are_not_inside_a_root: test
+normalize::tests::absent_fields_produce_no_metadata_key: test
+normalize::tests::capabilities_track_state_and_never_expose_unavailable_actions: test
+normalize::tests::compose_attribution_requires_both_labels: test
+normalize::tests::compose_ids_are_stable_and_project_scoped: test
+normalize::tests::container_normalization_emits_expected_fields_and_relations: test
+normalize::tests::container_state_mapping_covers_docker_vocabulary: test
+normalize::tests::identity_survives_a_container_rename: test
+normalize::tests::image_prefers_digest_for_identity: test
+normalize::tests::image_without_digest_falls_back_to_id_and_is_not_running: test
+normalize::tests::named_volume_mounts_become_edges_and_bind_mounts_become_metadata: test
+normalize::tests::network_falls_back_to_name_when_id_is_absent: test
+normalize::tests::network_without_id_or_name_is_not_given_a_fabricated_identity: test
+normalize::tests::relations_are_deterministically_ordered: test
+normalize::tests::same_container_id_on_two_endpoints_stays_distinct: test
+normalize::tests::standalone_container_gets_no_compose_relation: test
+normalize::tests::volume_identity_is_name_plus_endpoint: test
+observation::tests::capabilities_do_not_over_claim_guest_only_domains: test
+observation::tests::engine_data_is_provider_native_not_host_native: test
+observation::tests::health_domain_sorts_and_dedups_warnings: test
+observation::tests::non_container_does_not_claim_process_observation: test
+observation::tests::system_domain_merges_info_when_available: test
+observation::tests::system_domain_reports_only_what_the_engine_sent: test
+observation::tests::unavailable_snapshot_is_a_state_not_an_error: test
+provider::tests::capabilities_are_reported_without_any_engine: test
+provider::tests::compose_helpers_are_reachable_from_the_provider_module: test
+provider::tests::confirmed_destructive_operation_reaches_the_transport: test
+provider::tests::construction_needs_no_daemon: test
+provider::tests::debug_output_omits_secrets: test
+provider::tests::destructive_operations_require_confirmation: test
+provider::tests::discover_fails_loudly_instead_of_returning_an_empty_batch: test
+provider::tests::exec_rejects_empty_argv_and_non_container_targets: test
+provider::tests::health_is_unavailable_not_an_error_when_engine_is_unreachable: test
+provider::tests::health_reports_a_usable_engine_as_healthy: test
+provider::tests::observe_degrades_instead_of_failing: test
+provider::tests::prune_is_refused_outright: test
+provider::tests::relation_kinds_are_the_documented_docker_set: test
+provider::tests::resolve_target_rejects_resources_from_another_provider: test
+provider::tests::runtime_node_never_leaks_the_credential_reference: test
+provider::tests::runtime_node_omits_api_version_when_not_negotiated: test
+provider::tests::shutdown_is_idempotent: test
+
+59 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_provider_docker_sandbox-5e542c55b4fc7e99.exe)
+fixture::tests::a_fixture_sandbox_without_a_runtime_emits_no_runtime_relation: test
+fixture::tests::every_node_is_labelled_as_fixture_data: test
+fixture::tests::ids_are_stable_across_calls: test
+fixture::tests::image_relations_use_the_uses_image_edge: test
+fixture::tests::nested_runtime_relations_use_the_docker_in_sandbox_edge: test
+fixture::tests::relations_always_resolve_to_nodes_in_the_same_batch: test
+fixture::tests::sandbox_nodes_record_the_fixture_tier: test
+fixture::tests::the_batch_is_already_sorted: test
+fixture::tests::the_fixture_timestamp_is_fixed_not_wall_clock: test
+fixture::tests::the_fixture_world_is_not_empty: test
+fixture::tests::two_runs_produce_identical_batches: test
+observation::tests::a_fixture_snapshot_says_so_in_its_own_warnings: test
+observation::tests::a_native_snapshot_carries_no_fixture_warning: test
+observation::tests::each_tier_has_a_distinct_provenance_source: test
+observation::tests::only_the_native_tier_requires_a_native_credential: test
+observation::tests::snapshot_does_not_invent_domains: test
+observation::tests::snapshot_values_inherit_guest_probe_trust: test
+observation::tests::the_cli_tier_does_not_offer_process_or_file_domains: test
+observation::tests::the_native_tier_offers_process_and_file_domains: test
+observation::tests::the_unavailable_warning_names_the_tier_and_the_reason: test
+observation::tests::trust_is_guest_probe_on_every_tier_including_native: test
+observation::tests::two_snapshot_builds_are_identical: test
+observation::tests::unavailable_is_a_snapshot_not_an_error: test
+provider::tests::capabilities_offer_exactly_the_modes_we_answer: test
+provider::tests::cli_discovery_is_sorted_by_id: test
+provider::tests::fixture_discovery_is_identical_across_provider_instances: test
+provider::tests::fixture_nodes_declare_fixture_provenance: test
+provider::tests::health_reflects_the_rung_reached: test
+provider::tests::inspect_finds_a_fixture_sandbox_at_the_fixture_tier: test
+provider::tests::inspect_rejects_a_fixture_id_when_the_api_tier_is_active: test
+provider::tests::inspect_reports_a_stable_error_for_an_unknown_id: test
+provider::tests::is_fixture_id_helper_agrees_with_the_batch: test
+provider::tests::native_observation_never_exceeds_guest_probe: test
+provider::tests::observation_at_the_fixture_tier_is_unavailable_not_an_error: test
+provider::tests::shutdown_is_idempotent: test
+provider::tests::the_cli_tier_refuses_the_native_only_operations: test
+provider::tests::the_cli_tier_reports_known_sandboxes_with_unknown_state: test
+provider::tests::the_cli_tier_warns_instead_of_fabricating_a_process_listing: test
+provider::tests::the_descriptor_reports_the_provider_version: test
+provider::tests::the_fixture_tier_refuses_a_fixture_id_at_the_cli_tier: test
+provider::tests::the_fixture_tier_refuses_to_fabricate_lifecycle_success: test
+provider::tests::the_fixture_tier_still_discovers_resources: test
+tests::fixture_provenance_is_distinguishable_from_real_provenance: test
+tests::plugin_id_is_the_reverse_domain_design_specifies: test
+tests::provider_version_is_the_crate_version: test
+tests::supported_api_versions_are_sorted_and_unique: test
+tier::tests::an_absent_api_falls_to_the_cli: test
+tier::tests::an_absent_api_reports_no_detected_version: test
+tier::tests::an_unsupported_api_version_falls_to_the_cli: test
+tier::tests::an_unsupported_version_without_a_cli_also_reaches_the_fixture: test
+tier::tests::degraded_health_keeps_control_available: test
+tier::tests::every_tier_has_a_distinct_wire_name: test
+tier::tests::native_wins_when_the_api_is_supported: test
+tier::tests::no_api_and_no_cli_reaches_the_fixture_tier: test
+tier::tests::the_fixture_tier_never_claims_control_is_available: test
+tier::tests::the_fixture_tier_never_claims_real_observation: test
+tier::tests::version_support_follows_the_declared_list: test
+
+57 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_provider_git_remote-fd055cfd9d98b8d5.exe)
+advertisement::tests::a_bad_object_id_is_refused_rather_than_stored: test
+advertisement::tests::a_genuinely_empty_repository_is_distinguishable_from_a_failure: test
+advertisement::tests::a_real_advertisement_yields_every_ref: test
+advertisement::tests::a_ref_flood_is_refused_before_it_can_allocate_without_limit: test
+advertisement::tests::a_ref_name_outside_head_and_refs_is_refused: test
+advertisement::tests::a_wrong_service_banner_is_refused: test
+advertisement::tests::a_zero_ref_response_is_refused_rather_than_reported_as_an_empty_repository: test
+advertisement::tests::malformed_framing_is_an_error_not_an_empty_list: test
+advertisement::tests::protocol_v2_is_reported_as_unsupported_not_as_an_empty_repository: test
+advertisement::tests::sha256_object_ids_are_recognised: test
+advertisement::tests::the_object_id_is_the_content_addressed_value_we_carry_as_evidence: test
+advertisement::tests::the_ref_order_does_not_depend_on_server_order: test
+observation::tests::a_degraded_channel_is_distinguishable_from_an_unavailable_one: test
+observation::tests::a_repository_with_no_commits_is_reported_as_empty_not_as_unavailable: test
+observation::tests::an_absent_head_target_is_null_not_an_empty_string: test
+observation::tests::an_unavailable_channel_carries_no_values: test
+observation::tests::the_content_addressed_ids_reach_the_snapshot: test
+observation::tests::the_declared_capabilities_do_not_claim_native_or_exec: test
+observation::tests::the_evidence_hash_changes_when_any_ref_changes: test
+observation::tests::the_snapshot_is_byte_stable_for_the_same_advertisement: test
+observation::tests::the_snapshot_is_probe_mode_at_the_guest_probe_ceiling: test
+pktline::tests::a_length_that_runs_past_the_input_is_an_error: test
+pktline::tests::a_non_hex_length_is_an_error: test
+pktline::tests::a_payload_without_a_trailing_lf_is_an_error: test
+pktline::tests::a_truncated_packet_is_an_error: test
+pktline::tests::an_empty_input_decodes_to_no_packets: test
+pktline::tests::decodes_a_real_multi_ref_advertisement: test
+pktline::tests::decoding_stops_at_the_flush_so_later_sections_are_not_invented: test
+pktline::tests::encoding_refuses_an_oversized_payload: test
+pktline::tests::reserved_packets_are_distinguished_from_data: test
+pktline::tests::reserved_values_cover_every_length_below_the_header_size: test
+pktline::tests::round_trips_a_data_packet: test
+pktline::tests::the_invalid_sentinel_is_an_error_not_an_empty_section: test
+pktline::tests::trailing_whitespace_after_the_final_flush_is_tolerated: test
+provider::tests::a_malformed_advertisement_is_degraded_not_empty: test
+provider::tests::a_missing_capability_grant_never_reaches_the_network: test
+provider::tests::a_penetrable_resource_never_reaches_the_network: test
+provider::tests::a_permitted_fetch_produces_a_guest_probe_snapshot: test
+provider::tests::an_unregistered_resource_never_reaches_the_network: test
+provider::tests::domains_this_channel_cannot_answer_are_marked_partial: test
+provider::tests::the_declared_capability_set_is_unscoped_and_denies_by_default: test
+provider::tests::the_operator_can_see_the_exact_scope_before_granting_it: test
+transport::tests::a_connection_refused_is_named_as_a_failure_not_as_empty_content: test
+transport::tests::a_content_type_with_parameters_is_normalized: test
+transport::tests::a_missing_content_type_is_reported_as_absent_not_as_empty_string: test
+transport::tests::a_non_success_status_is_reported_rather_than_parsed: test
+transport::tests::a_real_server_is_fetched_over_a_real_socket: test
+transport::tests::a_redirect_is_never_followed_and_never_reaches_its_target: test
+transport::tests::a_slow_server_times_out_instead_of_hanging_the_observation: test
+transport::tests::an_oversized_body_is_cut_off_rather_than_buffered: test
+transport::tests::an_unparseable_url_is_refused_before_any_socket_is_opened: test
+url::tests::a_bare_host_with_no_path_is_refused: test
+url::tests::a_control_character_in_the_path_is_refused: test
+url::tests::a_plain_https_remote_parses_and_yields_its_capability_scope: test
+url::tests::a_query_or_fragment_is_refused: test
+url::tests::a_remote_command_smuggled_after_the_path_is_refused: test
+url::tests::a_traversal_segment_is_refused: test
+url::tests::an_explicit_port_is_preserved: test
+url::tests::an_invalid_port_is_refused_rather_than_defaulted: test
+url::tests::an_ipv6_literal_keeps_its_brackets_and_parses_the_port: test
+url::tests::an_omitted_port_still_yields_an_explicit_scope: test
+url::tests::credentials_in_the_url_are_refused: test
+url::tests::only_http_and_https_are_accepted: test
+url::tests::the_endpoint_scope_survives_the_policy_gate_hygiene_rules: test
+url::tests::whitespace_in_the_path_is_refused: test
+
+65 tests, 0 benchmarks
+     Running tests\e2e.rs (E:\DevCache\cargo\target-dev\debug\deps\e2e-4c0051658fd8670b.exe)
+a_connection_refused_yields_unavailable_and_never_an_empty_repository: test
+a_grant_for_another_endpoint_does_not_reach_this_one: test
+a_penetrable_sandbox_is_never_contacted_even_though_the_endpoint_answers: test
+a_sandbox_published_remote_is_fetched_over_http_and_read: test
+a_second_observation_reflects_a_changed_remote: test
+an_endpoint_that_answers_something_else_yields_degraded_not_empty: test
+an_endpoint_without_a_grant_is_never_contacted: test
+the_channel_reports_its_own_capability_surface: test
+the_evidence_hash_is_present_and_changes_with_the_content: test
+
+9 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_provider_mcp_remote-b386f40bab9110c0.exe)
+jsonrpc::tests::a_comment_only_stream_yields_no_message_frame: test
+jsonrpc::tests::a_matching_success_response_is_accepted: test
+jsonrpc::tests::a_non_2_0_version_is_refused: test
+jsonrpc::tests::a_non_json_body_is_refused: test
+jsonrpc::tests::a_response_for_a_different_request_is_refused: test
+jsonrpc::tests::a_response_with_both_or_neither_is_refused: test
+jsonrpc::tests::a_stream_with_several_messages_yields_every_one: test
+jsonrpc::tests::an_error_response_is_never_coerced_into_an_empty_result: test
+jsonrpc::tests::an_unterminated_final_frame_is_still_captured: test
+jsonrpc::tests::crlf_framing_is_accepted: test
+jsonrpc::tests::requests_serialize_with_the_version_and_id: test
+jsonrpc::tests::sse_frames_yield_their_data_payloads: test
+observation::tests::a_handshake_missing_required_fields_is_refused_not_defaulted: test
+observation::tests::a_server_with_no_tools_is_reported_as_zero_not_as_a_failure: test
+observation::tests::a_tool_list_that_is_not_a_list_is_refused: test
+observation::tests::an_unavailable_channel_carries_no_values_and_fails_the_policy_gate: test
+observation::tests::the_declared_capabilities_do_not_claim_native_or_exec: test
+observation::tests::the_evidence_hash_changes_when_a_tool_schema_changes: test
+observation::tests::the_exposed_surface_reaches_the_snapshot_in_canonical_order: test
+observation::tests::the_snapshot_is_byte_stable_for_the_same_session: test
+observation::tests::the_snapshot_is_probe_mode_at_the_guest_probe_ceiling: test
+provider::tests::a_penetrable_resource_never_reaches_the_network: test
+provider::tests::a_permitted_endpoint_yields_a_guest_probe_snapshot: test
+provider::tests::a_server_error_is_degraded_not_an_empty_tool_list: test
+provider::tests::a_server_without_the_tools_capability_yields_an_empty_list_not_a_failure: test
+provider::tests::a_stream_with_no_matching_frame_is_a_failure_not_an_empty_result: test
+provider::tests::an_event_stream_reply_is_read_and_correlated: test
+provider::tests::an_unexpected_content_type_is_refused_by_name: test
+provider::tests::an_ungranted_endpoint_never_reaches_the_network: test
+provider::tests::correlation_ids_are_unique_and_echoed_back: test
+provider::tests::domains_this_channel_cannot_answer_are_marked_partial: test
+provider::tests::the_declared_capabilities_are_unscoped: test
+provider::tests::the_operator_can_see_the_exact_scope_before_granting_it: test
+transport::tests::a_bad_endpoint_url_is_refused_before_any_socket_is_opened: test
+transport::tests::a_json_rpc_call_travels_over_a_real_socket: test
+transport::tests::a_non_success_status_is_reported_rather_than_parsed: test
+transport::tests::a_slow_endpoint_times_out_instead_of_hanging_the_observation: test
+transport::tests::an_event_stream_response_is_returned_verbatim_for_the_sse_reader: test
+transport::tests::an_oversized_body_is_cut_off_rather_than_buffered: test
+transport::tests::the_request_carries_the_headers_mcp_requires: test
+url::tests::a_host_with_no_path_is_refused: test
+url::tests::a_plain_endpoint_parses_and_yields_its_capability_scope: test
+url::tests::an_ipv6_literal_and_an_invalid_port_are_handled: test
+url::tests::an_omitted_port_still_yields_an_explicit_scope: test
+url::tests::credentials_are_refused: test
+url::tests::only_http_and_https_are_accepted: test
+url::tests::query_fragment_and_traversal_are_refused: test
+url::tests::the_emitted_scope_survives_the_policy_gate_hygiene_rules: test
+
+48 tests, 0 benchmarks
+     Running tests\e2e.rs (E:\DevCache\cargo\target-dev\debug\deps\e2e-8658f61087e0f6d9.exe)
+a_penetrable_sandbox_is_never_contacted: test
+a_sandbox_published_endpoint_is_called_over_http_and_read: test
+a_server_error_is_degraded_and_never_an_empty_tool_list: test
+an_endpoint_without_a_grant_is_never_contacted: test
+an_unreachable_endpoint_yields_unavailable_not_an_empty_inventory: test
+no_mcp_tool_is_ever_invoked: test
+the_evidence_hash_moves_when_the_tool_inventory_changes: test
+
+7 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_provider_multipass-609b7cddc0a56390.exe)
+cli::tests::bounding_counts_characters_not_bytes: test
+cli::tests::bounding_reports_truncation_explicitly: test
+cli::tests::empty_argv_is_rejected_before_spawning: test
+cli::tests::instance_names_accept_realistic_values: test
+cli::tests::instance_names_reject_option_injection: test
+cli::tests::missing_binary_is_distinguished_from_a_failed_call: test
+cli::tests::overlong_names_are_rejected: test
+cli::tests::version_argv_is_the_availability_probe: test
+observation::tests::a_non_object_payload_is_not_coerced: test
+observation::tests::an_empty_report_is_unavailable_rather_than_healthy: test
+observation::tests::capabilities_claim_exec_but_not_probe_or_nested_docker: test
+observation::tests::complete_report_yields_a_healthy_snapshot: test
+observation::tests::exec_data_is_never_host_native: test
+observation::tests::nested_docker_payload_is_surfaced_but_marked_partial: test
+observation::tests::partial_domain_is_present_and_flagged_not_hidden: test
+observation::tests::snapshot_values_are_sorted_for_byte_stability: test
+observation::tests::unavailable_snapshot_preserves_the_resource_and_says_why: test
+observation::tests::unknown_domains_in_a_report_are_ignored: test
+parse::tests::capabilities_track_instance_state: test
+parse::tests::collector_argv_uses_option_terminator_and_sorted_domains: test
+parse::tests::collector_domain_wire_round_trip: test
+parse::tests::empty_ip_list_produces_no_key: test
+parse::tests::empty_list_is_a_valid_empty_result: test
+parse::tests::errors_are_sorted_and_deduped_for_stable_output: test
+parse::tests::exec_argv_does_not_interpret_metacharacters: test
+parse::tests::exec_argv_preserves_the_caller_vector_exactly: test
+parse::tests::instance_id_is_stable_and_name_scoped: test
+parse::tests::malformed_list_json_is_rejected: test
+parse::tests::non_array_fields_are_ignored_rather_than_crashing: test
+parse::tests::parses_a_complete_collector_report: test
+parse::tests::parses_and_sorts_list_entries: test
+parse::tests::partial_collector_output_keeps_good_domains: test
+parse::tests::running_instance_normalizes_expected_fields: test
+parse::tests::state_mapping_is_exhaustive_over_documented_values: test
+parse::tests::stopped_instance_has_no_ip_metadata_key: test
+parse::tests::unknown_collector_keys_and_domains_are_rejected_or_dropped: test
+provider::tests::availability_is_probed_once_and_cached: test
+provider::tests::capabilities_are_available_without_the_product: test
+provider::tests::confirmed_lifecycle_issues_the_expected_verb: test
+provider::tests::declared_capabilities_are_deny_by_default_shaped: test
+provider::tests::destructive_operations_require_confirmation_before_any_cli_call: test
+provider::tests::discover_fails_instead_of_returning_an_empty_batch: test
+provider::tests::discover_normalizes_instances_deterministically: test
+provider::tests::exec_fails_cleanly_when_the_product_is_absent: test
+provider::tests::exec_passes_argv_verbatim_and_reports_the_exit_code: test
+provider::tests::exec_rejects_an_empty_argv: test
+provider::tests::health_is_healthy_when_the_binary_answers: test
+provider::tests::health_is_unavailable_when_the_binary_is_absent: test
+provider::tests::inspect_resolves_by_resource_id: test
+provider::tests::lifecycle_verbs_match_the_cli_mapping: test
+provider::tests::observe_collects_the_system_domain_via_exec: test
+provider::tests::observe_degrades_when_the_collector_exits_non_zero: test
+provider::tests::observe_degrades_when_the_product_is_absent: test
+provider::tests::shutdown_is_idempotent: test
+provider::tests::unsupported_operation_is_refused: test
+
+55 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_provider_windows_sandbox-088a922c55bbfd4e.exe)
+definition::tests::a_definition_without_mapped_folders_is_accepted: test
+definition::tests::a_document_without_configuration_is_rejected: test
+definition::tests::bridge_command_interpolates_only_safe_values: test
+definition::tests::containment_rejects_escapes: test
+definition::tests::definition_name_comes_from_the_file_stem: test
+definition::tests::guest_folder_traversal_is_refused: test
+definition::tests::logon_command_text_is_captured: test
+definition::tests::malformed_readonly_attribute_never_becomes_writable: test
+definition::tests::mapped_folders_are_sorted_for_deterministic_output: test
+definition::tests::normalization_uses_host_observed_state_not_the_document: test
+definition::tests::parses_a_minimal_definition: test
+definition::tests::protected_host_locations_are_never_mappable: test
+definition::tests::sandbox_capabilities_never_grant_a_shell: test
+definition::tests::sandbox_id_is_stable_and_namespaced: test
+definition::tests::writable_mappings_are_limited_to_the_outbox: test
+envelope::tests::a_composite_path_key_is_still_checked: test
+envelope::tests::a_foreign_nonce_is_refused: test
+envelope::tests::a_guest_path_that_escapes_its_root_is_refused: test
+envelope::tests::a_home_expansion_path_is_refused: test
+envelope::tests::a_mismatched_or_empty_hash_is_refused: test
+envelope::tests::a_replayed_or_out_of_order_sequence_is_refused: test
+envelope::tests::a_stale_or_future_timestamp_is_refused: test
+envelope::tests::a_tampered_payload_fails_the_hash_check: test
+envelope::tests::a_well_formed_envelope_is_accepted: test
+envelope::tests::an_ordinary_guest_path_is_accepted: test
+envelope::tests::an_oversized_collection_is_refused: test
+envelope::tests::an_oversized_payload_is_refused: test
+envelope::tests::an_unknown_schema_is_refused: test
+envelope::tests::an_unparsable_timestamp_is_refused: test
+envelope::tests::canonical_domains_are_order_independent: test
+envelope::tests::envelope_round_trips_through_json: test
+envelope::tests::excessive_nesting_is_refused: test
+envelope::tests::malformed_bytes_are_reported_not_panicked: test
+envelope::tests::unc_and_host_root_absolute_paths_are_refused: test
+envelope::tests::validation_order_puts_binding_before_content: test
+observation::tests::a_full_envelope_set_yields_a_healthy_snapshot: test
+observation::tests::a_missing_domain_degrades_rather_than_failing: test
+observation::tests::capabilities_claim_probe_and_metadata_floor: test
+observation::tests::later_envelopes_win_per_domain: test
+observation::tests::nested_docker_is_advertised_only_when_the_guest_reports_one: test
+observation::tests::no_envelope_is_unavailable_not_an_error: test
+observation::tests::probe_data_is_guest_probe_and_never_security_authoritative: test
+observation::tests::snapshot_values_are_sorted_for_byte_stability: test
+observation::tests::unavailable_snapshot_records_the_reason: test
+observation::tests::unknown_domain_names_are_dropped: test
+provider::tests::a_definition_with_a_forbidden_mapping_is_refused_loudly: test
+provider::tests::a_foreign_nonce_envelope_is_not_consumed: test
+provider::tests::a_malformed_definition_is_skipped_not_fatal: test
+provider::tests::capabilities_are_available_without_a_running_probe: test
+provider::tests::debug_output_never_prints_the_session_nonce: test
+provider::tests::destructive_lifecycle_requires_confirmation_first: test
+provider::tests::discover_fails_when_the_definitions_directory_is_missing: test
+provider::tests::discover_reports_definitions_with_host_observed_state: test
+provider::tests::envelope_validation_advances_the_replay_window: test
+provider::tests::health_is_degraded_before_any_probe_reports: test
+provider::tests::health_is_unavailable_when_definitions_are_absent: test
+provider::tests::lifecycle_is_delegated_and_refused_here: test
+provider::tests::observe_degrades_when_no_envelope_is_present: test
+provider::tests::observe_merges_a_valid_envelope_as_guest_probe: test
+provider::tests::outbox_containment_is_enforced_on_read: test
+provider::tests::part_files_are_skipped_as_in_progress: test
+provider::tests::shutdown_clears_the_replay_window_and_is_idempotent: test
+
+62 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_resource_graph-5942b275b567cd84.exe)
+graph::tests::a_resource_seen_again_within_grace_stays_alive: test
+graph::tests::children_are_deterministically_ordered: test
+graph::tests::cycles_do_not_recurse_forever: test
+graph::tests::first_batch_emits_added_once_per_id: test
+graph::tests::last_seen_alone_is_not_a_change: test
+graph::tests::mark_missing_is_scoped_to_one_provider: test
+graph::tests::missing_resource_is_staled_before_being_tombstoned: test
+graph::tests::orphan_nodes_are_listable_but_unrendered: test
+graph::tests::real_field_change_emits_changed: test
+graph::tests::relations_are_deduplicated_and_bidirectional: test
+graph::tests::removing_a_node_drops_its_edges: test
+graph::tests::timestamp_parsing_is_fail_closed: test
+graph::tests::tree_is_ordered_and_filtered_by_node_not_hoisted: test
+
+13 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_sdk-9abb8ca08a3f2c58.exe)
+manifest::tests::accepts_valid_plugin_manifest: test
+manifest::tests::app_manifest_parses_reference_toml: test
+manifest::tests::app_manifest_rejects_duplicate_cluster_ids: test
+manifest::tests::app_manifest_rejects_empty_plugin_list: test
+manifest::tests::app_manifest_round_trips_json: test
+manifest::tests::cross_checks_shipped_app_schema: test
+manifest::tests::cross_checks_shipped_plugin_schema: test
+manifest::tests::package_hash_is_blake3_of_bytes: test
+manifest::tests::rejects_bad_plugin_id: test
+manifest::tests::rejects_duplicate_capabilities: test
+manifest::tests::rejects_non_semver_version: test
+manifest::tests::rejects_non_spdx_license: test
+manifest::tests::rejects_unknown_field: test
+manifest::tests::rejects_unknown_kind: test
+manifest::tests::rejects_unknown_schema_version: test
+manifest::tests::rejects_unparsable_capability: test
+ports::tests::health_control_availability_follows_observation_independence: test
+ports::tests::registry_keeps_deterministic_order_and_capability_separation: test
+ports::tests::unverified_helper_is_the_weakest_trust: test
+wit::tests::parses_and_accepts_known_world: test
+wit::tests::rejects_component_from_wrong_package: test
+wit::tests::stfs_id_is_derived_from_provider_and_native_id: test
+wit::tests::unknown_component_error_cannot_invent_a_code: test
+
+23 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_store-c28df753b385a3a2.exe)
+cas::tests::corrupt_object_fails_verification: test
+cas::tests::gc_accepts_a_full_digest_and_reconstructs_it_from_the_path: test
+cas::tests::gc_keeps_referenced_and_grace_period_objects: test
+cas::tests::identical_content_reuses_the_object: test
+cas::tests::layout_is_two_char_prefix_then_full_digest: test
+cas::tests::missing_object_is_vfs_not_found: test
+cas::tests::no_temp_files_survive_a_successful_put: test
+cas::tests::put_and_get_round_trip: test
+cas::tests::stream_put_matches_buffered_put: test
+db::tests::a_newer_database_is_refused_rather_than_downgraded: test
+db::tests::design_indexes_exist: test
+db::tests::every_design_table_exists: test
+db::tests::file_backed_store_opens_readers: test
+db::tests::foreign_keys_are_enforced: test
+db::tests::interrupted_operations_are_recovered_on_startup: test
+db::tests::migrate_is_idempotent: test
+db::tests::open_in_memory_applies_the_schema: test
+db::tests::transaction_rolls_back_on_error: test
+repo::tests::a_tcp_port_is_not_mistaken_for_a_credential: test
+repo::tests::app_generations_are_immutable_and_single_active: test
+repo::tests::docker_endpoint_rejects_embedded_credentials: test
+repo::tests::docker_endpoint_round_trips: test
+repo::tests::events_are_appended_and_purged_by_age: test
+repo::tests::failed_operation_keeps_the_stable_code: test
+repo::tests::grants_are_stored_and_ordered: test
+repo::tests::operation_job_is_recorded_before_dispatch: test
+repo::tests::plugin_package_upsert_replaces_instead_of_conflicting: test
+repo::tests::resource_row_conversion_rejects_corrupt_ids: test
+repo::tests::snapshot_manifest_round_trips: test
+repo::tests::workspace_mount_round_trips: test
+resources::tests::delete_removes_relations_too: test
+resources::tests::listing_filters_by_provider_and_state: test
+resources::tests::relations_round_trip_and_filter_by_endpoint: test
+resources::tests::resource_round_trips_with_capabilities_and_metadata: test
+resources::tests::stale_marking_never_tombstones: test
+resources::tests::stale_marking_touches_only_unseen_resources: test
+resources::tests::upsert_reports_added_then_changed_then_quiet: test
+
+37 tests, 0 benchmarks
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-18dc9bdb5502c62c.exe)
+a_credentialed_endpoint_profile_is_refused_by_the_store: test
+a_daemon_session_completes_without_leaking_state: test
+a_destructive_operation_is_confirmed_and_audited: test
+a_genuine_deletion_is_visible_before_it_is_applied: test
+a_runtime_outage_and_recovery_round_trips_cleanly: test
+observation_trust_never_rises_across_an_outage: test
+the_daemon_starts_on_a_machine_with_no_runtimes_installed: test
+the_ipc_layer_survives_a_truncated_and_an_oversized_peer: test
+
+8 tests, 0 benchmarks
+     Running tests\acceptance.rs (E:\DevCache\cargo\target-dev\debug\deps\acceptance-2b8efc7ee20faa0c.exe)
+uat_001_the_tree_is_well_formed_and_deterministically_ordered: test
+uat_002_a_destructive_lifecycle_refuses_before_anything_else: test
+uat_003_workspace_browsing_is_canonical_and_windowed: test
+uat_004_inspect_returns_the_normalised_node_and_names_what_is_missing: test
+uat_007_exec_output_is_bounded_and_the_bound_is_visible: test
+uat_010_compose_attribution_is_not_invented_for_a_standalone_container: test
+uat_011_a_visible_snapshot_names_only_objects_the_cas_can_serve: test
+uat_015_the_diagnostics_bundle_is_deterministic_and_secret_free: test
+uat_017_a_destructive_action_is_refused_then_audited_when_attempted: test
+uat_018_a_non_desktop_endpoint_is_addressable_and_classified: test
+uat_019_cli_and_daemon_expose_the_same_method_set: test
+uat_020_the_plugin_host_refuses_a_licence_outside_the_allow_list: test
+uat_021_the_same_domain_set_is_reported_every_time: test
+uat_022_trust_is_reported_and_never_rises_under_observation: test
+uat_023_an_unavailable_plane_reports_a_state_rather_than_raising: test
+
+15 tests, 0 benchmarks
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_vfs-ef4264e5d098b06a.exe)
+confinement::tests::confine_joins_within_root: test
+confinement::tests::confine_rejects_traversal_relative: test
+confinement::tests::confine_root_returns_root: test
+confinement::tests::guest_reported_traversal_cannot_become_relative_path: test
+confinement::tests::is_within_uses_component_boundary: test
+confinement::tests::to_relative_strips_root_and_rejects_outside: test
+error::tests::escape_attempts_map_to_vfs_path_escape: test
+error::tests::other_errors_map_to_core_invalid: test
+error::tests::renders_domain_error_with_code: test
+integration_smoke::parse_reserialize_resolve_flow: test
+mount::tests::insert_get_remove: test
+mount::tests::listing_is_deterministic: test
+mount::tests::mount_mode_wire_round_trip: test
+mount::tests::rejects_empty_id: test
+mount::tests::resolve_prefers_longest_prefix: test
+mount::tests::unmounted_path_denies_write: test
+path::tests::accepts_canonical_and_dotted_forms: test
+path::tests::join_and_parent_round_trip: test
+path::tests::join_rejects_traversal_names: test
+path::tests::rejects_absolute_host_paths: test
+path::tests::rejects_backslash_and_interior_empty_segment: test
+path::tests::rejects_every_traversal_form: test
+path::tests::rejects_nul_and_oversized: test
+path::tests::serde_round_trips_as_string: test
+path::tests::starts_with_uses_segment_boundary: test
+read::tests::empty_file_yields_empty_window: test
+read::tests::explicit_length_within_bounds: test
+read::tests::length_is_clamped_to_file_end: test
+read::tests::length_none_reads_to_end: test
+read::tests::offset_beyond_eof_is_rejected: test
+read::tests::oversized_file_is_rejected_not_truncated: test
+read::tests::total_budget_clamps_an_otherwise_valid_read: test
+uri::tests::canonical_form_percent_encodes_odd_characters: test
+uri::tests::child_applies_same_validation: test
+uri::tests::idempotent_parse_of_canonical_form: test
+uri::tests::nested_uri_round_trips: test
+uri::tests::percent_decoded_traversal_is_rejected: test
+uri::tests::percent_encoded_separator_is_still_a_separator: test
+uri::tests::redacted_does_not_leak_full_resource_id: test
+uri::tests::rejects_invalid_resource_id: test
+uri::tests::rejects_malformed_percent_escapes: test
+uri::tests::rejects_missing_and_wrong_scheme: test
+uri::tests::root_uri_round_trips: test
+uri::tests::serde_round_trips_as_string_and_rejects_traversal: test
+
+44 tests, 0 benchmarks
+   Doc-tests sandtree_cli
+0 tests, 0 benchmarks
+   Doc-tests sandtree_daemon
+0 tests, 0 benchmarks
+   Doc-tests sandtree_event
+0 tests, 0 benchmarks
+   Doc-tests sandtree_feature_compose
+0 tests, 0 benchmarks
+   Doc-tests sandtree_ipc
+0 tests, 0 benchmarks
+   Doc-tests sandtree_kernel
+0 tests, 0 benchmarks
+   Doc-tests sandtree_mock_observation
+mock\observation\src\lib.rs - (line 21): test
+
+1 test, 0 benchmarks
+   Doc-tests sandtree_mock_runtime
+0 tests, 0 benchmarks
+   Doc-tests sandtree_mock_wasm_components
+0 tests, 0 benchmarks
+   Doc-tests sandtree_model
+0 tests, 0 benchmarks
+   Doc-tests sandtree_observation_core
+0 tests, 0 benchmarks
+   Doc-tests sandtree_observation_model
+0 tests, 0 benchmarks
+   Doc-tests sandtree_plugin_host
+0 tests, 0 benchmarks
+   Doc-tests sandtree_plugin_worker
+0 tests, 0 benchmarks
+   Doc-tests sandtree_policy
+0 tests, 0 benchmarks
+   Doc-tests sandtree_probe_windows
+0 tests, 0 benchmarks
+   Doc-tests sandtree_provider_docker
+0 tests, 0 benchmarks
+   Doc-tests sandtree_provider_docker_sandbox
+0 tests, 0 benchmarks
+   Doc-tests sandtree_provider_git_remote
+0 tests, 0 benchmarks
+   Doc-tests sandtree_provider_mcp_remote
+0 tests, 0 benchmarks
+   Doc-tests sandtree_provider_multipass
+0 tests, 0 benchmarks
+   Doc-tests sandtree_provider_windows_sandbox
+0 tests, 0 benchmarks
+   Doc-tests sandtree_resource_graph
+0 tests, 0 benchmarks
+   Doc-tests sandtree_sdk
+0 tests, 0 benchmarks
+   Doc-tests sandtree_store
+0 tests, 0 benchmarks
+   Doc-tests sandtree_vfs
+0 tests, 0 benchmarks

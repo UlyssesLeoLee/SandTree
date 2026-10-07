@@ -186,22 +186,28 @@ impl Worker {
             // inspect and invoke a component the same way it would any other
             // provider — before ADR-016 follow-up, a component could be staged
             // and health-checked but never served a request.
+            //
+            // The port is the same `Arc` the runtime is, not a second instance:
+            // two generations of the same component sharing a store is how a
+            // swapped-out plugin keeps serving traffic.
             let ports = match kind {
                 PluginKind::Provider => {
                     sandtree_sdk::ports::ProviderInstance::empty(staged.plugin_id.clone())
-                        .with_resource(std::sync::Arc::new(runtime.clone()))
+                        .with_resource(
+                            runtime.clone() as Arc<dyn sandtree_sdk::ports::ResourceProvider>
+                        )
                 }
                 _ => sandtree_sdk::ports::ProviderInstance::empty(staged.plugin_id.clone()),
             };
-            let generation = LoadedGeneration::new(
+            let loaded = Arc::new(LoadedGeneration::new(
                 staged.plugin_id.clone(),
                 self.spec.generation,
                 runtime,
                 ports,
-            );
-            self.loaded = Some(generation.clone());
+            ));
+            self.loaded = Some(loaded.clone());
             self.state = WorkerState::Ready;
-            Ok(generation)
+            Ok(loaded)
         }
         #[cfg(not(feature = "wasmtime-abi"))]
         {

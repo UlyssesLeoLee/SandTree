@@ -1,0 +1,15 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-16976c9888e83a53.exe)
+
+running 8 tests
+test the_ipc_layer_survives_a_truncated_and_an_oversized_peer ... ok
+test the_daemon_starts_on_a_machine_with_no_runtimes_installed ... ok
+test a_destructive_operation_is_confirmed_and_audited ... ok
+test observation_trust_never_rises_across_an_outage ... ok
+test a_runtime_outage_and_recovery_round_trips_cleanly ... ok
+test a_genuine_deletion_is_visible_before_it_is_applied ... ok
+test a_credentialed_endpoint_profile_is_refused_by_the_store ... ok
+test a_daemon_session_completes_without_leaking_state ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

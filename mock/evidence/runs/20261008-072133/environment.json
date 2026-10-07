@@ -1,0 +1,11 @@
+{
+  "run_name": "20261008-072133",
+  "build_id": "3e8203e77157109b682956919fcda91f8ed662eb",
+  "branch": "dev",
+  "dirty": true,
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+  "cargo_target": "E:\\DevCache\\cargo\\target-dev",
+  "host_os": "Microsoft Windows NT 10.0.26300.0",
+  "docker_daemon": "failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; check if the path is correct and if the daemon is running: open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified."
+}

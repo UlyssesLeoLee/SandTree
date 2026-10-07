@@ -73,6 +73,30 @@ fn expected_deviations(fixture: Fixture) -> Option<Vec<(&'static str, &'static s
 }
 
 #[test]
+fn manifest_export_lists_match_the_code() {
+    // `exports` was data nothing read. An entry sat there listing eight names
+    // for the valid fixture -- the two interfaces plus six type names that live
+    // inside the instances, not at component scope -- and no test noticed,
+    // because "top-level exports" was only ever checked in the engine module,
+    // which compares `Fixture::expected_exports()` and never the manifest.
+    // Two copies of one fact with no assertion between them is how that happens.
+    let m = manifest::manifest();
+    for f in Fixture::ALL {
+        let e = m.entry(f).expect("entry");
+        let mut from_manifest = e.exports.clone();
+        let mut from_code: Vec<String> =
+            f.expected_exports().iter().map(|s| s.to_string()).collect();
+        from_manifest.sort();
+        from_code.sort();
+        assert_eq!(
+            from_manifest, from_code,
+            "entry {} lists different exports than the fixture declares",
+            e.id
+        );
+    }
+}
+
+#[test]
 fn every_fixture_has_a_manifest_entry_and_the_reverse() {
     let m = manifest::manifest();
     assert_eq!(
