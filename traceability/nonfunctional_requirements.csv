@@ -1,0 +1,33 @@
+﻿id,category,priority,name,requirement
+NFR-A01,可用性,MUST,Provider 隔离,任一 provider/plugin 错误不得阻塞 daemon 启动或其他 provider discovery；trap/crash 应隔离。
+NFR-A02,可用性,MUST,状态一致性,外部 runtime event 丢失后通过周期 reconcile 恢复最终一致。
+NFR-A03,可用性,SHOULD,恢复,daemon 非正常退出后重启能恢复 DB，running operation 标记 interrupted 并重新 discovery。
+NFR-P01,性能・拡張性,MUST,首次可见,在 1 个本机 Docker endpoint、200 containers/resources 情况下，主拓扑首屏 P95 ≤ 2.5s。
+NFR-P02,性能・拡張性,MUST,增量更新,Docker event 到 UI resource state 更新 P95 ≤ 1.0s（本机 endpoint）。
+NFR-P03,性能・拡張性,SHOULD,规模,"单 daemon 支持至少 10 provider instances、2,000 resources、100,000 file metadata entries。"
+NFR-P04,性能・拡張性,SHOULD,HotSwap,插件 generation route swap 本身 ≤ 250ms；health/migration 时间不计入 atomic swap。
+NFR-O01,運用・保守性,MUST,可观测性,所有 operation 有 correlation_id、structured log、duration、result；支持诊断包。
+NFR-O02,運用・保守性,MUST,可维护性,Kernel 不引用具体 Docker Sandbox/Multipass/Windows Sandbox SDK 类型；跨边界仅 domain DTO/WIT。
+NFR-O03,運用・保守性,MUST,Rust-first,业务 Core、Provider Host、Docker Provider、CLI、Daemon 均以 Rust 为主要实现语言；例外必须记录 ADR。
+NFR-O04,運用・保守性,MUST,测试性,Core trait/WIT contract 可用 fake provider；所有 MUST FR 至少映射一个 IT/ST/UAT 或 UT。
+NFR-M01,移行性,MUST,DB migration,Schema migration 有版本、备份点、事务边界和回滚说明；失败不破坏旧数据。
+NFR-M02,移行性,SHOULD,Plugin state,HotSwap state migration 必须 versioned；不兼容时拒绝切换并保留旧 generation。
+NFR-S01,セキュリティ,MUST,最小权限,daemon 默认 per-user、非管理员；管理员操作由底层平台显式触发。
+NFR-S02,セキュリティ,MUST,Capability deny-by-default,plugin host fs/network/exec/secret 权限默认拒绝；按最小 scope 授权。
+NFR-S03,セキュリティ,MUST,Secret,secret 使用 OS secret store/credential reference；DB/log/export 不保存明文 secret。
+NFR-S04,セキュリティ,MUST,Docker endpoint,对 tcp:// 非 TLS endpoint 显示高风险警告；不得默认开启 2375。
+NFR-S05,セキュリティ,MUST,Path traversal,所有 VFS path normalize 并阻止 ..、reparse/symlink 越权逃逸 root。
+NFR-E01,システム環境・エコロジー,MUST,Windows,Desktop Baseline 支持 Windows 11 x64；Windows Sandbox provider 仅在受支持 edition/feature 启用。
+NFR-E02,システム環境・エコロジー,MUST,Docker runtime independence,核心对接 Docker Engine API/Moby-compatible endpoint；Docker Desktop 仅作为用户自备可选 endpoint，不作为许可前提。
+NFR-E03,システム環境・エコロジー,MUST,OSS/商业,默认发布物仅允许商业友好 OSS/公有领域依赖；copyleft/source-available 进入发布物需显式法律/架构例外。
+NFR-E04,システム環境・エコロジー,MUST,License Gate,CI/Release 对 Cargo.lock、bundled binaries、frontend deps 运行 license/source/advisory gate，并产出 SBOM。
+NFR-U01,ユーザビリティ(项目补充),MUST,认知负荷,主 UI 树默认只显示 Host→Sandbox/Docker→关键资源；高级 relation/metrics 按需展开。
+NFR-U02,ユーザビリティ(项目补充),MUST,危险操作,destroy/remove/prune 等不可逆动作必须明确资源范围并二次确认。
+NFR-A04,可用性,MUST,Observation 降级,Native/Exec/Probe 不可用时自动退化，Control Plane 与其他 provider 不受影响。
+NFR-P05,性能・拡張性,MUST,观测开销,默认 metadata-first，不持续全盘读取正文；基准机上额外开销受控。
+NFR-P06,性能・拡張性,SHOULD,Freshness,process/network 默认 5s、filesystem metadata 默认 10s，可 provider 配置。
+NFR-O05,運用・保守性,MUST,Provenance,跨隔离边界数据必须记录 source/trust/observed_at/freshness/partial。
+NFR-S06,セキュリティ,MUST,隔离保持,不得通过 guest 暴露 host Docker socket、全盘可写映射或管理员 token 实现观测。
+NFR-S07,セキュリティ,MUST,Probe 最小能力,Probe 固定 capability、无通用 shell；bootstrap RO、outbox 独立。
+NFR-S08,セキュリティ,MUST,不信任 Guest,guest payload 按不可信输入解析并限制大小/深度/路径。
+NFR-E05,システム環境・エコロジー,MUST,Provider 兼容隔离,实验/变化 API 仅影响 provider plugin，不泄漏进 Kernel。

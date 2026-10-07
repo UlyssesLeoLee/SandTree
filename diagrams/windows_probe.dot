@@ -1,0 +1,14 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.4, fontname="Noto Sans CJK JP"];
+  node [shape=box, style="rounded,filled", fontname="Noto Sans CJK JP", fontsize=10.5, color="#475569", fillcolor="#F8FAFC"];
+  Host [label="SandTree Host\nWindows user session", fillcolor="#EEF2FF"];
+  RO [label="Bootstrap mapping\nREAD-ONLY\nprobe.exe + config", fillcolor="#DCFCE7"];
+  SB [label="Windows Sandbox\nWDAGUtilityAccount / System\nEphemeral", fillcolor="#FFF7E6", color="#B68A2E"];
+  Probe [label="sandtree-probe.exe\ncollect → normalize → sign/hash envelope"];
+  Out [label="Telemetry Outbox\nwrite-only-by-convention\nminimal mapped folder / broker", fillcolor="#FFEDD5"];
+  Host -> RO [label=" prepare"];
+  RO -> SB [label=" mapped before LogonCommand"];
+  SB -> Probe [label=" LogonCommand / wsb exec"];
+  Probe -> Out [label=" atomic temp→rename"];
+  Out -> Host [label=" host consumes + validates"];
+}

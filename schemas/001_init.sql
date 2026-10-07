@@ -1,0 +1,15 @@
+PRAGMA foreign_keys=ON;
+CREATE TABLE resource(id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, state TEXT NOT NULL, parent_id TEXT, metadata_json TEXT NOT NULL DEFAULT '{}', last_seen TEXT NOT NULL, FOREIGN KEY(parent_id) REFERENCES resource(id));
+CREATE INDEX idx_resource_provider_kind ON resource(provider_id,kind,state);
+CREATE TABLE resource_relation(from_id TEXT NOT NULL,to_id TEXT NOT NULL,kind TEXT NOT NULL,metadata_json TEXT NOT NULL DEFAULT '{}',PRIMARY KEY(from_id,to_id,kind),FOREIGN KEY(from_id) REFERENCES resource(id),FOREIGN KEY(to_id) REFERENCES resource(id));
+CREATE TABLE plugin_package(plugin_id TEXT NOT NULL,version TEXT NOT NULL,content_hash TEXT NOT NULL,manifest_json TEXT NOT NULL,license_expr TEXT NOT NULL,installed_at TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(plugin_id,version));
+CREATE TABLE plugin_instance(instance_id TEXT PRIMARY KEY,plugin_id TEXT NOT NULL,version TEXT NOT NULL,cluster_id TEXT NOT NULL,generation INTEGER NOT NULL,state TEXT NOT NULL,health TEXT NOT NULL,state_schema_version INTEGER NOT NULL DEFAULT 0,last_error_code TEXT,started_at TEXT,FOREIGN KEY(plugin_id,version) REFERENCES plugin_package(plugin_id,version));
+CREATE TABLE app_generation(app_id TEXT NOT NULL,generation INTEGER NOT NULL,manifest_hash TEXT NOT NULL,manifest_json TEXT NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL,activated_at TEXT,PRIMARY KEY(app_id,generation));
+CREATE TABLE plugin_grant(app_id TEXT NOT NULL,plugin_id TEXT NOT NULL,capability TEXT NOT NULL,resource_scope TEXT NOT NULL,decision TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(app_id,plugin_id,capability,resource_scope));
+CREATE TABLE docker_endpoint(id TEXT PRIMARY KEY,uri TEXT NOT NULL,api_version TEXT,engine_version TEXT,os TEXT,arch TEXT,health TEXT NOT NULL,last_seen TEXT NOT NULL);
+CREATE TABLE workspace_mount(id TEXT PRIMARY KEY,resource_id TEXT NOT NULL,source_uri TEXT,target_uri TEXT NOT NULL,mode TEXT NOT NULL,metadata_json TEXT NOT NULL DEFAULT '{}',FOREIGN KEY(resource_id) REFERENCES resource(id));
+CREATE TABLE snapshot(id TEXT PRIMARY KEY,resource_id TEXT NOT NULL,created_at TEXT NOT NULL,manifest_hash TEXT NOT NULL,metadata_json TEXT NOT NULL DEFAULT '{}',FOREIGN KEY(resource_id) REFERENCES resource(id));
+CREATE TABLE snapshot_entry(snapshot_id TEXT NOT NULL,uri TEXT NOT NULL,content_hash TEXT,size INTEGER NOT NULL,mtime_ns INTEGER,PRIMARY KEY(snapshot_id,uri),FOREIGN KEY(snapshot_id) REFERENCES snapshot(id));
+CREATE TABLE event_log(id INTEGER PRIMARY KEY AUTOINCREMENT,resource_id TEXT,event_type TEXT NOT NULL,correlation_id TEXT NOT NULL,payload_json TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE INDEX idx_event_time_resource ON event_log(created_at,resource_id,event_type);
+CREATE TABLE operation_job(id TEXT PRIMARY KEY,resource_id TEXT,operation TEXT NOT NULL,state TEXT NOT NULL,requested_at TEXT NOT NULL,started_at TEXT,finished_at TEXT,correlation_id TEXT NOT NULL,error_code TEXT,result_json TEXT);

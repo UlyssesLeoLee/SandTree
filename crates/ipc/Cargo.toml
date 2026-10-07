@@ -1,0 +1,19 @@
+[package]
+name = "sandtree-ipc"
+description = "SandTree IPC: length-prefixed framing, method routing, Windows named-pipe transport (DD-DATA §5, §6)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["io-util", "sync", "rt", "macros", "net"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

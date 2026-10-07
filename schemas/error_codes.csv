@@ -1,0 +1,15 @@
+﻿code,category,meaning,retryable
+ST-CORE-001,CORE,invalid request / invariant violation,no
+ST-POL-001,POLICY,capability denied,no
+ST-PLG-001,PLUGIN,manifest invalid,no
+ST-PLG-002,PLUGIN,health probe failed,yes
+ST-PLG-003,PLUGIN,hot swap migration rejected,no
+ST-DKR-001,DOCKER,endpoint unavailable,yes
+ST-DKR-002,DOCKER,API version incompatible,no
+ST-DKR-003,DOCKER,resource conflict/in use,no
+ST-SBX-001,SANDBOX,provider unavailable,yes
+ST-SBX-002,SANDBOX,operation unsupported,no
+ST-VFS-001,VFS,path escapes workspace root,no
+ST-VFS-002,VFS,resource/file not found,no
+ST-DB-001,STORE,transaction failed,yes
+ST-IPC-001,IPC,protocol/frame invalid,no

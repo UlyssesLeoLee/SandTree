@@ -1,0 +1,23 @@
+[package]
+name = "sandtree-provider-multipass"
+description = "Multipass provider: CLI-driven sandbox lifecycle and exec observation (DD-PLG §9, DD-OBS §12.3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+sandtree-vfs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

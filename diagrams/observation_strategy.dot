@@ -1,0 +1,18 @@
+digraph G {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.3, ranksep=0.45, fontname="Noto Sans CJK JP"];
+  node [shape=box, style="rounded,filled", fontname="Noto Sans CJK JP", fontsize=10.5, color="#475569", fillcolor="#F8FAFC"];
+  edge [fontname="Noto Sans CJK JP", fontsize=9, color="#64748B"];
+  S [label="Observe(resource)", fillcolor="#FFF7E6", color="#B68A2E"];
+  N [shape=diamond,label="Native observation API?",fillcolor="#FFFFFF"];
+  E [shape=diamond,label="Remote exec with output?",fillcolor="#FFFFFF"];
+  P [shape=diamond,label="Probe injection allowed?",fillcolor="#FFFFFF"];
+  A [label="Mode A — NATIVE\nProvider API / host API"];
+  B [label="Mode B — EXEC\nbounded collector command"];
+  C [label="Mode C — PROBE\nephemeral guest telemetry"];
+  D [label="Mode D — METADATA\nhost-visible state only"];
+  Z [label="Normalize → Provenance → Cache → Resource Graph",fillcolor="#ECFDF5"];
+  S->N; N->A [label="yes"]; N->E [label="no"];
+  E->B [label="yes"]; E->P [label="no"];
+  P->C [label="yes"]; P->D [label="no"];
+  {A B C D}->Z;
+}

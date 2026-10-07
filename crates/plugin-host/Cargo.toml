@@ -1,0 +1,35 @@
+[package]
+name = "sandtree-plugin-host"
+description = "SandTree plugin host: package verification, worker limits, generation route table, atomic hot swap (FR-050..055, DD-PLG)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+wasmtime = { workspace = true, optional = true }
+
+[features]
+default = []
+# WASM Component Model adapter (FR-054). Off by default so the trust and swap
+# logic can be built and tested on machines without a WASM engine; the design
+# requires the ABI, so release builds enable it.
+wasmtime-abi = ["dep:wasmtime"]
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+# `wat` lets tests build components from the text format, so containment and
+# error paths are testable without a wasm32 toolchain. Release builds stay on
+# binary components only.
+wasmtime = { workspace = true, features = ["wat"] }

@@ -1,0 +1,5 @@
+digraph G { graph [bgcolor="transparent",rankdir=TB,pad=.2]; node [shape=box,style="rounded,filled",fontname="Noto Sans CJK SC",fontsize=9,color="#9D7A2E",fillcolor="#FFF9EC"]; edge[color="#777777"]; UT[label="UT
+crate/module/contract/property"]; IT[label="IT
+Kernel↔Plugin↔Docker/Sandbox adapter"]; ST[label="ST
+end-to-end / performance / security / recovery"]; UAT[label="UAT
+operator scenarios / acceptance"]; Base[label="Requirements + Basic + Detailed Design",fillcolor="#F3D88A"]; Base->UT; Base->IT; Base->ST; Base->UAT; UT->IT->ST->UAT [style=dashed,label="quality gate"]; }

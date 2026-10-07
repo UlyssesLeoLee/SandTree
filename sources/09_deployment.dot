@@ -1,0 +1,6 @@
+digraph G { graph [bgcolor="transparent", rankdir=LR, nodesep=.45, ranksep=.55, pad=.2]; node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=10, color="#9D7A2E", fillcolor="#FFF9EC"]; edge [color="#777777", fontname="Noto Sans CJK SC", fontsize=8]; subgraph cluster_host {label="Windows 11 Host"; Desktop[label="sandtree-desktop
+Tauri"]; Daemon[label="sandtree-daemon
+per-user"]; Worker[label="plugin-worker(s)
+Wasmtime"]; DB[label="SQLite + CAS"]; Pipe[label="Named Pipe IPC"]; Docker[label="Docker/Moby endpoint
+local pipe/socket or remote TLS"]; Desktop->Pipe->Daemon; Daemon->DB; Daemon->Worker; Worker->Docker; } SB[label="Windows Sandbox
+bridge/bootstrap"]; MP[label="Multipass VM"]; DS[label="Docker Sandbox"]; Worker->SB; Worker->MP; Worker->DS; }

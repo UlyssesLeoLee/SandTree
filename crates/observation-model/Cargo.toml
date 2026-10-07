@@ -1,0 +1,16 @@
+[package]
+name = "sandtree-observation-model"
+description = "SandTree Observation DTO: Mode/Trust/Health/Provenance/Snapshot (DD-OBS §5-6, DD-SW §12.2)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+blake3.workspace = true

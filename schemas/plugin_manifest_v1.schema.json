@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SandTree Plugin Manifest v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plugin_id",
+    "version",
+    "kind",
+    "component",
+    "license",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "plugin_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9.-]+$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "provider",
+        "feature",
+        "integration",
+        "ui-contribution"
+      ]
+    },
+    "component": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "hot_swap": {
+      "type": "boolean"
+    },
+    "state_schema_version": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,33 @@
+[package]
+name = "sandtree-daemon"
+description = "SandTree daemon: kernel host, IPC method surface, event pump (DD-SW §3, DD-DATA §6)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sandtree_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sandtree-daemon"
+path = "src/main.rs"
+
+[dependencies]
+sandtree-event.workspace = true
+sandtree-ipc.workspace = true
+sandtree-kernel.workspace = true
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-store.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,11 @@
+code,meaning,retry,ui_action
+ST-OBS-001,No observation strategy available,no,Show metadata-only mode
+ST-OBS-002,Observation deadline exceeded,yes,Retry or lower domain set
+ST-OBS-003,Snapshot stale,yes,Refresh
+ST-OBS-004,Probe bootstrap failed,yes,Show probe diagnostics
+ST-OBS-005,Probe envelope invalid,no,Quarantine payload and warn
+ST-OBS-006,Provider native credential denied,maybe,Re-authenticate provider
+ST-OBS-007,Collector output too large,no,Use pagination/domain narrowing
+ST-OBS-008,Guest path escaped configured root,no,Block and audit
+ST-OBS-009,Source trust below policy threshold,no,Show untrusted/partial value
+ST-OBS-010,Nested Docker endpoint unavailable,yes,Show Docker child as degraded

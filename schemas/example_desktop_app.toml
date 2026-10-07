@@ -1,0 +1,23 @@
+schema_version = 1
+app_id = "sandtree.desktop"
+version = "1.0.0"
+
+[[clusters]]
+cluster_id = "docker"
+plugins = ["sandtree.provider.docker", "sandtree.feature.compose", "sandtree.feature.docker-events"]
+required = true
+
+[[clusters]]
+cluster_id = "sandbox"
+plugins = ["sandtree.provider.windows-sandbox", "sandtree.provider.docker-sandbox", "sandtree.provider.multipass"]
+required = false
+
+[[clusters]]
+cluster_id = "workspace"
+plugins = ["sandtree.workspace.vfs", "sandtree.snapshot.cas"]
+required = true
+
+[[clusters]]
+cluster_id = "optional-integration"
+plugins = ["sandtree.integration.mcp", "sandtree.integration.agent-observer", "sandtree.search.tantivy"]
+required = false

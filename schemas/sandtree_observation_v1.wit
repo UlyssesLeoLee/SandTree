@@ -1,0 +1,39 @@
+package sandtree:observation@1.0.0;
+
+interface observation-provider {
+  enum observation-mode { native, exec, probe, metadata }
+  enum trust-level { host-native, provider-native, remote-exec, guest-probe, unverified }
+  enum health { healthy, degraded, unavailable, stale }
+
+  record observe-request {
+    resource-id: string,
+    domains: list<string>,
+    max-age-ms: u64,
+    deadline-ms: u64,
+  }
+
+  record provenance {
+    source: string,
+    trust: trust-level,
+    observed-at-rfc3339: string,
+    freshness-ms: u64,
+    evidence-hash: option<string>,
+    partial: bool,
+  }
+
+  record observed-json {
+    domain: string,
+    value-json: string,
+    provenance: provenance,
+  }
+
+  record observation-result {
+    mode: observation-mode,
+    health: health,
+    values: list<observed-json>,
+    warnings: list<string>,
+  }
+
+  capabilities: func(resource-id: string) -> result<list<string>, string>;
+  observe: func(request: observe-request) -> result<observation-result, string>;
+}

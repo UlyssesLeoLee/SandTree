@@ -1,0 +1,6 @@
+provider,preferred_mode,fallback_mode,host_state,processes,files,network,docker_nested,notes
+Docker Sandbox,native,metadata,yes,yes,yes,yes,yes,"Use sandbox-scoped endpoint credentials and declared permissions"
+Multipass,exec,metadata,yes,yes,yes,yes,yes,"Use multipass exec; transfer for file payload; bounded collector"
+Windows Sandbox,probe,metadata,yes,yes,yes,yes,optional,"wsb exec currently has no process I/O; probe needed for rich telemetry"
+Docker Engine,native,metadata,yes,container-scoped,container API,yes,self,"Engine API is authoritative for Docker resources"
+Generic/Unknown,metadata,none,yes,no,no,no,no,"Never pierce isolation without explicit provider capability"

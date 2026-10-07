@@ -1,0 +1,9 @@
+digraph G { graph [bgcolor="transparent", rankdir=LR, nodesep=.45, ranksep=.55, pad=.2]; node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=10, color="#9D7A2E", fillcolor="#FFF9EC"]; edge [color="#777777", fontname="Noto Sans CJK SC", fontsize=8]; subgraph cluster_app {label="App Cluster"; Desktop [label="Desktop App"]; Headless [label="Headless App"];} subgraph cluster_kernel {label="Microkernel"; K [label="Resource Graph
+Plugin Host
+Policy/Capability
+Event Router
+Store/VFS Facade",fillcolor="#F3D88A"]; } subgraph cluster_plugins {label="Plugin Clusters"; D [label="Docker Cluster
+Engine/Compose/Observability"]; S [label="Sandbox Cluster
+WinSBX/DockerSBX/Multipass"]; W [label="Workspace Cluster
+VFS/Snapshot/CAS"]; O [label="Optional Cluster
+Search/MCP/Agent Observer"]; } Desktop->K; Headless->K; K->D; K->S; K->W; K->O [style=dashed]; }

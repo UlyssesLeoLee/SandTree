@@ -1,0 +1,18 @@
+﻿Layer,Technology,Role,License / commercial stance,Baseline
+Language,Rust stable,Core/daemon/plugins/CLI,MIT OR Apache-2.0 ecosystem,MUST
+Desktop,Tauri 2,Desktop shell; business logic stays Rust,per upstream; release gate verifies bundled deps,MUST
+Async,Tokio,runtime/concurrency,MIT,MUST
+Serialization,Serde/serde_json,DTO/config/protocol,MIT OR Apache-2.0,MUST
+Plugin ABI,Wasmtime + Component Model + WIT,stable plugin isolation/ABI,Apache-2.0 WITH LLVM-exception family; verify lock,MUST
+Docker API,Bollard,Docker Engine/Podman-compatible API client,Apache-2.0,MUST for Docker cluster
+Docker Runtime,Moby/Docker Engine compatible endpoint,"external runtime, not redistributed by default",Moby Apache-2.0,MUST interface
+Docker Compose,Docker Compose v2 CLI if installed,optional lifecycle compatibility adapter,Apache-2.0; external binary preferred,SHOULD
+DB,SQLite + rusqlite,core relational metadata,SQLite public domain; rusqlite MIT,MUST
+Plugin KV,redb,isolated plugin local state,MIT OR Apache-2.0,SHOULD
+Git optional,gix/gitoxide,optional workspace metadata,MIT OR Apache-2.0,OPTIONAL
+Search optional,Tantivy,full-text search plugin,MIT,OPTIONAL
+Hash,BLAKE3,CAS/content identity,CC0-1.0 OR Apache-2.0 variants,MUST
+Logging,tracing,structured logs,MIT,MUST
+CLI,clap,CLI parsing,MIT OR Apache-2.0,MUST
+License gate,cargo-deny + SBOM generator,dependency policy,MIT OR Apache-2.0 for cargo-deny,MUST CI
+Docker Desktop,User-provided only,optional Windows Docker endpoint,separate subscription terms; NOT required/bundled,OPTIONAL external

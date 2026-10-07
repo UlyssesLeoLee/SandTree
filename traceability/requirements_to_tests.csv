@@ -1,0 +1,91 @@
+﻿requirement_id,priority,name,test_case_ids
+FR-001,MUST,Host/Runtime Discovery,UT-026;IT-035;ST-001
+FR-002,MUST,Resource Graph,UT-001;UT-002
+FR-003,MUST,Topology Tree,UT-041
+FR-004,SHOULD,Resource Relations,UT-003
+FR-010,MUST,Sandbox Inventory,IT-036
+FR-011,MUST,Sandbox Lifecycle,ST-005;UAT-002
+FR-012,MUST,Sandbox Inspect,IT-037
+FR-013,SHOULD,Sandbox Exec/Shell,
+FR-014,MUST,Sandbox Workspace,UAT-003
+FR-015,SHOULD,Sandbox File Mutation,IT-021
+FR-016,SHOULD,Sandbox Logical Snapshot,
+FR-017,MUST,Windows Sandbox Provider,IT-025;IT-026
+FR-018,MUST,Docker Sandbox Provider,IT-038
+FR-019,MUST,Multipass Provider,IT-027;IT-028
+FR-020,MUST,Docker Endpoint Management,UT-029;IT-001
+FR-021,MUST,Docker Runtime Inspect,IT-002
+FR-022,MUST,Container Inventory,UT-032;IT-003;ST-006;UAT-004
+FR-023,MUST,Container Lifecycle,UT-023;UT-024;UT-025;IT-004;ST-007;UAT-005
+FR-024,MUST,Container Logs,IT-005;ST-008;UAT-006
+FR-025,MUST,Container Exec,IT-006;ST-009;UAT-007
+FR-026,MUST,Image Management,UT-033;IT-007;ST-010;UAT-008
+FR-027,MUST,Volume Management,IT-008;UAT-009
+FR-028,MUST,Network Management,IT-009
+FR-029,MUST,Docker Events & Stats,IT-010
+FR-030,MUST,Compose Discovery,UT-031;IT-012;ST-011;UAT-010
+FR-031,SHOULD,Compose Lifecycle,IT-013;IT-014
+FR-032,MUST,Compose Status/Logs,IT-039
+FR-040,MUST,Canonical VFS,UT-004;UT-005;IT-020;ST-012
+FR-041,MUST,Workspace Mount Model,UT-034
+FR-042,SHOULD,File Metadata Search,
+FR-043,MUST,Content Hash & Diff,UT-007
+FR-044,MUST,Snapshot/CAS,UT-008;UT-009;IT-023;IT-024;ST-013;UAT-011;UAT-012
+FR-050,MUST,Plugin Package,UT-010;UT-011;IT-015;UAT-013
+FR-051,MUST,Plugin Capability,UT-012;UT-013;UT-014;IT-016
+FR-052,MUST,Plugin Hot Swap,UT-015;UT-016;UT-017;IT-017;IT-018;ST-014;UAT-014
+FR-053,MUST,Plugin Cluster / App Cluster,UT-038;UT-039
+FR-054,MUST,Plugin Isolation,UT-018
+FR-055,SHOULD,Plugin Worker Isolation,IT-019
+FR-060,MUST,Desktop UI,ST-026
+FR-061,MUST,Inspector Actions,UT-028;ST-027
+FR-062,MUST,CLI,IT-030;UAT-019
+FR-063,MUST,Event Stream,UT-019;IT-029
+FR-064,MUST,Audit Log,UT-020;UT-037;ST-028
+FR-065,SHOULD,Config Import/Export,
+FR-066,MUST,Diagnostics Bundle,UT-021;IT-032;ST-022;UAT-015
+FR-O01,OPTIONAL,Agent Observer Plugin,
+FR-O02,OPTIONAL,MCP Adapter Plugin,
+NFR-A01,MUST,Provider 隔离,UT-027;ST-015
+NFR-A02,MUST,状态一致性,UT-022;IT-011
+NFR-A03,SHOULD,恢复,ST-016
+NFR-P01,MUST,首次可见,ST-002
+NFR-P02,MUST,增量更新,ST-003
+NFR-P03,SHOULD,规模,ST-004
+NFR-P04,SHOULD,HotSwap,ST-029
+NFR-O01,MUST,可观测性,ST-030
+NFR-O02,MUST,可维护性,UT-042
+NFR-O03,MUST,Rust-first,UT-043
+NFR-O04,MUST,测试性,UT-044
+NFR-M01,MUST,DB migration,UT-035;UT-036;IT-034;ST-023
+NFR-M02,SHOULD,Plugin state,
+NFR-S01,MUST,最小权限,ST-017
+NFR-S02,MUST,Capability deny-by-default,ST-018
+NFR-S03,MUST,Secret,IT-031;ST-021
+NFR-S04,MUST,Docker endpoint,UT-030;ST-019
+NFR-S05,MUST,Path traversal,UT-006;IT-022;ST-020
+NFR-E01,MUST,Windows,ST-031
+NFR-E02,MUST,Docker runtime independence,ST-025;UAT-018
+NFR-E03,MUST,OSS/商业,UT-040;ST-024
+NFR-E04,MUST,License Gate,IT-033
+NFR-U01,MUST,认知负荷,UAT-016
+NFR-U02,MUST,危险操作,UAT-017
+FR-070,MUST,Observation Plane,ST-032;UAT-021
+FR-071,MUST,Observation Strategy Negotiation,UT-045;IT-047
+FR-072,MUST,Native Observation,IT-040;IT-041
+FR-073,MUST,Exec Observation,IT-042
+FR-074,MUST,Guest Probe,IT-044;IT-045;ST-035
+FR-075,MUST,Observation Snapshot,UT-050;ST-032
+FR-076,MUST,Provenance & Trust,UT-046;UAT-022
+FR-077,MUST,Lazy File Observation,UT-049;IT-043;ST-033
+FR-078,MUST,Docker-in-Sandbox Topology,IT-048;ST-037
+FR-079,MUST,Graceful Observation Degradation,IT-047;ST-035;UAT-023
+FR-080,SHOULD,Observation Freshness Policy,UT-047;UAT-022
+NFR-A04,MUST,Observation Degradation,IT-047;ST-035
+NFR-P05,MUST,Observation Overhead,ST-033
+NFR-P06,SHOULD,Freshness,UT-047
+NFR-O05,MUST,Provenance,UT-046;UAT-022
+NFR-S06,MUST,Isolation Preservation,IT-041;ST-036
+NFR-S07,MUST,Probe Least Capability,IT-044;IT-045
+NFR-S08,MUST,Untrusted Guest Input,UT-048;IT-046;ST-034
+NFR-E05,MUST,Provider Compatibility Isolation,IT-049

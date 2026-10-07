@@ -1,0 +1,59 @@
+﻿id,priority,name,requirement,acceptance
+FR-001,MUST,Host/Runtime Discovery,发现当前主机可用的 Sandbox Provider、Docker API endpoint、Compose CLI 和 Provider Plugin，并显示健康状态。,启动后可在 5 秒内给出 provider/runtime availability；单个 provider 失败不得阻塞其他 provider。
+FR-002,MUST,Resource Graph,将 Host、Sandbox、Docker Runtime、Container、Image、Volume、Network、Compose Project、Workspace 映射为统一资源图。,资源具有稳定 ID、父子/关联边、provider、状态、capability。
+FR-003,MUST,Topology Tree,以树形视图展示资源层级，并支持 provider/kind/state 过滤和刷新。,用户能从 Host 下钻到 sandbox/docker/container/workspace。
+FR-004,SHOULD,Resource Relations,支持非父子关系（mount、uses-image、member-of-compose、attached-network）的关联查询。,Inspector 能显示关联资源。
+FR-010,MUST,Sandbox Inventory,列出 Windows Sandbox、Docker Sandbox、Multipass 等已启用 provider 的实例/会话。,每项显示 provider、状态、创建/启动时间、能力、workspace。
+FR-011,MUST,Sandbox Lifecycle,按 capability 支持 start/stop/restart/destroy；危险操作显式确认。,操作产生 operation job、审计事件和最终状态。
+FR-012,MUST,Sandbox Inspect,读取 sandbox 的 CPU/内存/磁盘/网络/运行时元数据（provider 可用时）。,不支持字段显示 unavailable，不伪造数据。
+FR-013,SHOULD,Sandbox Exec/Shell,按 provider capability 执行命令或打开 shell；默认受 policy 限制。,执行有超时、输出截断策略、审计记录。
+FR-014,MUST,Sandbox Workspace,将 sandbox 内文件空间映射为统一 VFS，支持 list/stat/read。,只读能力是基础要求。
+FR-015,SHOULD,Sandbox File Mutation,provider 支持时允许 write/move/remove/upload/download，写操作必须经过 capability policy。,路径越界被拒绝；写入有明确审计。
+FR-016,SHOULD,Sandbox Logical Snapshot,对 workspace/resource metadata 建立逻辑快照、hash manifest 和 diff，不强依赖 VM snapshot。,可比较两个 snapshot 的文件/资源差异。
+FR-017,MUST,Windows Sandbox Provider,通过 .wsb + bootstrap/bridge 管理会话并暴露最小 file/exec/health 能力。,关闭后不可假设内部状态持久；持久数据必须显式导出。
+FR-018,MUST,Docker Sandbox Provider,以独立 Provider Plugin 对 Docker Sandbox 进行 discovery/lifecycle/file/exec 适配；允许 API/CLI 变化隔离在插件内。,Core 不引用 Docker Sandbox SDK 类型。
+FR-019,MUST,Multipass Provider,通过 Multipass CLI/接口发现实例并提供 lifecycle/exec/file transfer。,Multipass 未安装时 provider 处于 unavailable，不影响系统。
+FR-020,MUST,Docker Endpoint Management,支持 local pipe/socket、DOCKER_HOST 与显式 endpoint profile；验证 API version/health。,连接失败给出可诊断原因。
+FR-021,MUST,Docker Runtime Inspect,显示 Engine version、API version、OS/arch、rootless/remote 等关键属性。,结果来自 Docker API。
+FR-022,MUST,Container Inventory,列出 container 并显示 image、state、ports、labels、mounts、networks。,支持过滤/排序/增量刷新。
+FR-023,MUST,Container Lifecycle,start/stop/restart/kill/remove/pause/unpause 等操作按 capability 提供。,remove 默认不带 force，危险参数需二次确认。
+FR-024,MUST,Container Logs,读取历史日志并可流式 follow，支持时间范围/行数限制。,关闭页面/取消操作后流应停止。
+FR-025,MUST,Container Exec,在运行 container 中执行命令，支持 tty/non-tty、cwd、user（provider 可用时）。,secret/env 默认不进入日志。
+FR-026,MUST,Image Management,列出/inspect/pull/tag/remove image；build 作为 SHOULD。,pull/build 提供进度事件。
+FR-027,MUST,Volume Management,列出/inspect/create/remove volume；prune 默认禁用或强确认。,识别被 container 使用的 volume。
+FR-028,MUST,Network Management,列出/inspect/create/remove network，显示已连接 container。,删除 in-use network 被阻止或明确失败。
+FR-029,MUST,Docker Events & Stats,订阅 Docker events 和 container stats，并映射为 resource/event 更新。,断线后指数退避重连并进行 reconcile。
+FR-030,MUST,Compose Discovery,依据 labels/compose metadata 识别 Compose Project/Service/Container 关系。,不要求读取 compose 文件也能发现运行中项目。
+FR-031,SHOULD,Compose Lifecycle,检测到 Docker Compose CLI 时支持 up/down/start/stop/restart/pull。,CLI 不存在时能力自动降级。
+FR-032,MUST,Compose Status/Logs,显示 project/service/container 聚合状态与日志入口。,从树可跳转到 service containers。
+FR-040,MUST,Canonical VFS,所有可访问文件以 stfs://<resource-id>/<path> 作为 canonical URI。,路径 normalize 后不得逃逸 root；URI 可稳定序列化。
+FR-041,MUST,Workspace Mount Model,记录 Host↔Sandbox↔Container 的 mount/bind/volume 关系。,可从文件/资源反查 mount 来源。
+FR-042,SHOULD,File Metadata Search,核心支持按 path/name/type/resource 查询；全文内容搜索由可选 Tantivy Plugin 提供。,无 Search Plugin 时基础管理功能不受影响。
+FR-043,MUST,Content Hash & Diff,使用 BLAKE3 对按需文件内容做 hash，并提供 snapshot/file diff 基础能力。,相同内容可复用 CAS object。
+FR-044,MUST,Snapshot/CAS,逻辑 snapshot 写入 CAS 与 manifest，提交必须原子可恢复。,中途失败不出现可见半成品 snapshot。
+FR-050,MUST,Plugin Package,支持安装/验证/启用/禁用/卸载 Provider/Feature Plugin。,manifest schema、hash、license policy 校验通过后方可启用。
+FR-051,MUST,Plugin Capability,插件默认无 host fs/network/exec/secret 权限，按 app/plugin/resource scope 授权。,权限不足返回明确 error。
+FR-052,MUST,Plugin Hot Swap,支持 side-by-side stage→health→atomic generation swap→drain→rollback。,切换失败继续路由旧 generation。
+FR-053,MUST,Plugin Cluster / App Cluster,以 Plugin Cluster 组合 Sandbox/Docker/Workspace 等能力，再由 App Manifest 组合成 Desktop/Headless 等 App。,App 组成可声明、校验、版本化。
+FR-054,MUST,Plugin Isolation,公共插件 ABI 使用 WASM Component Model/WIT；不以 Rust dylib 作为跨版本 ABI。,插件 trap 不得导致 daemon 进程不可恢复。
+FR-055,SHOULD,Plugin Worker Isolation,第三方/高风险插件可运行在独立 worker 进程并限制资源。,worker crash 只影响对应插件实例。
+FR-060,MUST,Desktop UI,Tauri Desktop 提供 Topology、Docker、Sandbox、Workspace、Operations/Events、Settings。,核心操作均可从 UI 完成。
+FR-061,MUST,Inspector Actions,根据 resource capability 动态显示可用操作，不显示或禁用无能力操作。,UI 与 policy 决策一致。
+FR-062,MUST,CLI,提供 list/tree/inspect/start/stop/logs/exec/snapshot/plugin 等 CLI。,CLI 与 Desktop 共用 daemon contract。
+FR-063,MUST,Event Stream,提供增量资源事件与 operation progress，Desktop/CLI 可订阅。,事件包含 correlation_id 和 resource_id。
+FR-064,MUST,Audit Log,记录 write/exec/destroy/plugin/policy 关键操作，支持 retention 和导出。,默认脱敏 secret。
+FR-065,SHOULD,Config Import/Export,导入导出非 secret 配置、provider profiles、app manifests。,secret 仅保存引用。
+FR-066,MUST,Diagnostics Bundle,导出版本、provider health、最近错误、日志摘要、配置摘要（脱敏）。,不包含 token/password/private key。
+FR-O01,OPTIONAL,Agent Observer Plugin,可选插件识别 Codex/Claude/Hermes 等进程并显示为资源关联信息。,不安装时不影响 Sandbox/Docker 管理。
+FR-O02,OPTIONAL,MCP Adapter Plugin,可选 MCP adapter 将 SandTree 操作暴露给兼容 Agent。,MCP 不属于 Kernel 内部协议或必需依赖。
+FR-070,MUST,Observation Plane,为 Sandbox/VM/Runtime 提供统一观测入口，覆盖 system/process/filesystem/network/docker/health 等 domain。,不同 provider 结果归一化。
+FR-071,MUST,Observation Strategy Negotiation,按 Native→Exec→Probe→Metadata 的优先级选择可用观测模式。,失败自动降级并可解释。
+FR-072,MUST,Native Observation,存在原生读取 API 时优先使用原生 API。,不额外注入 guest agent。
+FR-073,MUST,Exec Observation,可从 host 取得 guest stdout 时使用有界 collector。,Multipass 等适用。
+FR-074,MUST,Guest Probe,平台缺少可靠 I/O 时使用 disposable Rust Probe。,Windows Sandbox rich telemetry。
+FR-075,MUST,Observation Snapshot,统一输出 ObservationSnapshot。,支持 partial/degraded/stale。
+FR-076,MUST,Provenance & Trust,每个值记录 source/trust/time/freshness/partial。,UI/Policy 可判断可信度。
+FR-077,MUST,Lazy File Observation,metadata first，正文按需。,避免全量复制大目录。
+FR-078,MUST,Docker-in-Sandbox Topology,将 guest 内 DockerRuntime 作为 sandbox child。,Container 保持所属隔离边界。
+FR-079,MUST,Graceful Observation Degradation,观测失败降级，不破坏 Control。,metadata-only 仍可管理。
+FR-080,SHOULD,Observation Freshness Policy,支持 max-age/poll/manual refresh。,控制负载与陈旧数据。

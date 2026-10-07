@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sandtree.local/schema/observation_snapshot_v1.json",
+  "title": "SandTree Observation Snapshot v1",
+  "type": "object",
+  "required": ["resource_id","observed_at","mode","health","values"],
+  "properties": {
+    "resource_id": {"type":"string","minLength":1},
+    "observed_at": {"type":"string","format":"date-time"},
+    "mode": {"enum":["native","exec","probe","metadata"]},
+    "health": {"enum":["healthy","degraded","unavailable","stale"]},
+    "collector_version": {"type":["string","null"]},
+    "values": {
+      "type":"object",
+      "additionalProperties": {"$ref":"#/$defs/observedValue"}
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type":"object",
+      "required":["source","trust","observed_at"],
+      "properties": {
+        "source":{"type":"string"},
+        "trust":{"enum":["host_native","provider_native","remote_exec","guest_probe","unverified"]},
+        "observed_at":{"type":"string","format":"date-time"},
+        "freshness_ms":{"type":"integer","minimum":0},
+        "evidence_hash":{"type":["string","null"]},
+        "partial":{"type":"boolean"}
+      }
+    },
+    "observedValue": {
+      "type":"object",
+      "required":["value","provenance"],
+      "properties": {
+        "value": {},
+        "provenance":{"$ref":"#/$defs/provenance"}
+      }
+    }
+  }
+}

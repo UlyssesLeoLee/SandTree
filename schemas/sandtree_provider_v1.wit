@@ -1,0 +1,20 @@
+package sandtree:plugin@1.0.0;
+
+interface lifecycle {
+  record descriptor { plugin-id: string, version: string, state-schema-version: u32 }
+  descriptor: func() -> descriptor;
+  init: func(config-json: string) -> result<_, string>;
+  health: func() -> result<string, string>;
+  prepare-upgrade: func(target-version: string) -> result<list<u8>, string>;
+  accept-upgrade: func(from-version: string, state: list<u8>) -> result<_, string>;
+  drain: func(deadline-ms: u64) -> result<_, string>;
+  shutdown: func();
+}
+
+interface resource-provider {
+  discover: func(cursor: option<string>) -> result<string, string>;
+  inspect: func(resource-id: string) -> result<string, string>;
+  invoke: func(resource-id: string, operation: string, payload-json: string) -> result<string, string>;
+}
+
+world provider-plugin { export lifecycle; export resource-provider; }

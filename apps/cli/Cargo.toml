@@ -1,0 +1,24 @@
+[package]
+name = "sandtree-cli"
+description = "SandTree CLI: a pure IPC client for the daemon (DD-SW §6, NFR-U02)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sandtree_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sandtree"
+path = "src/main.rs"
+
+[dependencies]
+sandtree-daemon.workspace = true
+sandtree-ipc.workspace = true
+sandtree-kernel.workspace = true
+sandtree-model.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

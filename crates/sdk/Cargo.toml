@@ -1,0 +1,24 @@
+[package]
+name = "sandtree-sdk"
+description = "SandTree plugin/app manifest + provider ports (DD-PLG §1-§3, DD-SW §11)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-vfs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+semver.workspace = true
+toml.workspace = true
+blake3.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

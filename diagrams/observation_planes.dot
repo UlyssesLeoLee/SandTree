@@ -1,0 +1,17 @@
+digraph G {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.35, ranksep=0.5, fontname="Noto Sans CJK JP"];
+  node [shape=box, style="rounded,filled", fontname="Noto Sans CJK JP", fontsize=11, color="#334155", fillcolor="#F8FAFC", fontcolor="#0F172A"];
+  edge [color="#64748B", penwidth=1.5, arrowsize=0.7];
+  ST [label="SandTree", fillcolor="#FFF7E6", color="#B68A2E", penwidth=2];
+  CP [label="Control Plane\ncreate / start / stop / exec", fillcolor="#EEF2FF"];
+  OP [label="Observation Plane\nstate / process / fs / docker / network", fillcolor="#FFF7E6", color="#B68A2E", penwidth=2];
+  DP [label="Data Plane\nVFS / logs / snapshot / CAS", fillcolor="#ECFDF5"];
+  PF [label="Provider Fabric\nCapability + Strategy Negotiation", fillcolor="#F1F5F9"];
+  DS [label="Docker Sandbox\nMode A: Native API"];
+  MP [label="Multipass\nMode B: Exec / Transfer"];
+  WS [label="Windows Sandbox\nMode C: Guest Probe"];
+  META [label="Metadata Only\nMode D: Degraded"];
+  ST -> {CP OP DP};
+  {CP OP DP} -> PF;
+  PF -> {DS MP WS META};
+}

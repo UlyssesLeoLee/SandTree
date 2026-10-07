@@ -1,0 +1,46 @@
+// Parse-legal copy of schemas/sandtree_provider_v1.wit.
+//
+// WHY THIS FILE EXISTS (ADR-004)
+// ------------------------------
+// `schemas/sandtree_provider_v1.wit` is a frozen design artefact and is not
+// modified. As written it is not accepted by a strict WIT parser:
+//
+//     record descriptor { plugin-id: string, version: string, state-schema-version: u32 }
+//     descriptor: func() -> descriptor;
+//
+// A type name and a function name share one namespace in the `lifecycle`
+// interface, so `wit-parser` rejects the file with
+// "name `descriptor` is defined more than once" *before* any rename option can
+// apply. The design text presents this as illustrative interface shape, so the
+// only fix available to the implementation is a copy whose record carries a
+// distinct name.
+//
+// This file differs from the design file in exactly one way: the record is
+// named `descriptor-record` instead of `descriptor`. Everything else — package
+// name, version, interface names, world, field names and types, function
+// signatures — is identical.
+//
+// The file is kept honest by `wit_copy_matches_design_file`, which fails if
+// the two ever diverge beyond that rename. The design file remains the source
+// of truth; this copy exists only so a parser can read it.
+
+package sandtree:plugin@1.0.0;
+
+interface lifecycle {
+  record descriptor-record { plugin-id: string, version: string, state-schema-version: u32 }
+  descriptor: func() -> descriptor-record;
+  init: func(config-json: string) -> result<_, string>;
+  health: func() -> result<string, string>;
+  prepare-upgrade: func(target-version: string) -> result<list<u8>, string>;
+  accept-upgrade: func(from-version: string, state: list<u8>) -> result<_, string>;
+  drain: func(deadline-ms: u64) -> result<_, string>;
+  shutdown: func();
+}
+
+interface resource-provider {
+  discover: func(cursor: option<string>) -> result<string, string>;
+  inspect: func(resource-id: string) -> result<string, string>;
+  invoke: func(resource-id: string, operation: string, payload-json: string) -> result<string, string>;
+}
+
+world provider-plugin { export lifecycle; export resource-provider; }

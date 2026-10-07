@@ -1,0 +1,10 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="transparent", pad=0.2, nodesep=0.25, ranksep=0.3, fontname="Noto Sans CJK JP"];
+  node [shape=box, style="rounded,filled", fontname="Noto Sans CJK JP", fontsize=10.5, color="#475569"];
+  H [label="HOST_NATIVE\nOS / hypervisor host-visible", fillcolor="#DCFCE7"];
+  P [label="PROVIDER_NATIVE\nDocker Sandbox API / runtime API", fillcolor="#ECFCCB"];
+  E [label="REMOTE_EXEC\nMultipass exec collector", fillcolor="#FEF3C7"];
+  G [label="GUEST_PROBE\ninside sandbox report", fillcolor="#FFEDD5"];
+  U [label="UNVERIFIED\nimported / stale / user supplied", fillcolor="#FEE2E2"];
+  H->P->E->G->U [label=" decreasing trust ", color="#B68A2E", penwidth=2];
+}

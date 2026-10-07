@@ -1,0 +1,15 @@
+[package]
+name = "sandtree-event"
+description = "SandTree typed event router with bounded queues and overload coalescing (FR-063, DD-SW §4, §12.3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

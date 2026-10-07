@@ -1,0 +1,27 @@
+[package]
+name = "sandtree-provider-windows-sandbox"
+description = "Windows Sandbox provider: .wsb discovery, probe-envelope observation (DD-PLG §7, DD-OBS §12.4)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+sandtree-vfs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+blake3.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["fs", "sync"] }
+quick-xml = "0.38"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

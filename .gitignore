@@ -1,0 +1,38 @@
+# Build output. Normally redirected outside the repo via CARGO_TARGET_DIR, but
+# the default location must still be ignored so a plain `cargo build` never
+# stages megabytes of artifacts.
+target/
+
+# Scratch workspace for one-off patch/inspection scripts written during
+# development. These are throwaway tooling, not product code and not tests;
+# anything worth keeping is promoted into scripts/, crates/*/src or tests/.
+.work/
+
+# Probe outbox partial writes (apps/probe-windows writes <name>.part then renames).
+# A crashed probe must not leave a half-written envelope looking like real data.
+*.part
+*.tmp
+
+# Local SQLite databases and CAS objects created by ad-hoc daemon runs.
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Windows / editor / OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Test and coverage output
+*.profraw
+coverage/
+
+# NOTE: the approved design baseline (00..11_*.docx), schemas/, traceability/,
+# tests/test_cases.json and PACKAGE_MANIFEST.csv are deliberately NOT ignored.
+# They are tracked, read-only inputs that the implementation must match.

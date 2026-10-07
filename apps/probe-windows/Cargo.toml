@@ -1,0 +1,24 @@
+[package]
+name = "sandtree-probe-windows"
+description = "Windows Sandbox observation Probe: single binary, fixed capability, read-only, atomic envelope outbox (DD-OBS §9, NFR-S06/S07)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sandtree_probe_windows"
+path = "src/lib.rs"
+
+[[bin]]
+name = "probe-windows"
+path = "src/main.rs"
+
+[dependencies]
+blake3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

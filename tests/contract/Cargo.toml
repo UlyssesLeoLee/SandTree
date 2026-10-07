@@ -1,0 +1,18 @@
+[package]
+name = "sandtree-contract-tests"
+description = "Contract tests: implementation vs the frozen machine-readable contracts in schemas/"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+
+[dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+sandtree-store.workspace = true
+sandtree-vfs.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+serde_json.workspace = true

@@ -1,0 +1,4 @@
+digraph G { graph [bgcolor="transparent", rankdir=LR, nodesep=.45, ranksep=.55, pad=.2]; node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=10, color="#9D7A2E", fillcolor="#FFF9EC"]; edge [color="#777777", fontname="Noto Sans CJK SC", fontsize=8]; User[label="Current User"]; UI[label="Desktop/CLI"]; Kernel[label="Kernel
+Policy Gate",fillcolor="#F3D88A"]; Plugin[label="Plugin Worker
+Deny-by-default"]; Docker[label="Docker Endpoint
+High privilege boundary"]; FS[label="stfs Workspace Root"]; Secret[label="OS Secret Store"]; User->UI->Kernel; Kernel->Plugin[label="capability token"]; Plugin->Docker[label="scoped API"]; Plugin->FS[label="normalized URI"]; Kernel->Secret[label="reference only"]; }

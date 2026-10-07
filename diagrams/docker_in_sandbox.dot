@@ -1,0 +1,11 @@
+digraph G {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.2, nodesep=0.3, ranksep=0.45, fontname="Noto Sans CJK JP"];
+  node [shape=box, style="rounded,filled", fontname="Noto Sans CJK JP", fontsize=10.5, color="#475569", fillcolor="#F8FAFC"];
+  H [label="Host"];
+  S [label="Sandbox resource", fillcolor="#FFF7E6", color="#B68A2E"];
+  D [label="Nested Docker Runtime\nendpoint discovered via observation"];
+  C1 [label="Container A"];
+  C2 [label="Container B"];
+  V [label="Volumes / Networks / Images"];
+  H->S; S->D; D->{C1 C2 V};
+}

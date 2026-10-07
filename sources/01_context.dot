@@ -1,0 +1,4 @@
+digraph G { graph [bgcolor="transparent", rankdir=LR, nodesep=.45, ranksep=.55, pad=.2]; node [shape=box, style="rounded,filled", fontname="Noto Sans CJK SC", fontsize=10, color="#9D7A2E", fillcolor="#FFF9EC"]; edge [color="#777777", fontname="Noto Sans CJK SC", fontsize=8]; User [label="Developer / Operator"]; ST [label="SandTree
+Sandbox & Docker Control Plane",fillcolor="#F3D88A"]; Docker [label="Docker Engine / Moby
+Docker API"]; WS [label="Windows Sandbox"]; DS [label="Docker Sandbox"]; MP [label="Multipass"]; UI [label="Desktop / CLI"]; Opt [label="Optional Integrations
+MCP / Agent Observer / Search"]; User->UI->ST; ST->Docker; ST->WS; ST->DS; ST->MP; Opt->ST [style=dashed]; }

@@ -1,0 +1,95 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/model",
+    "crates/observation-model",
+    "crates/policy",
+    "crates/event",
+    "crates/store",
+    "crates/vfs",
+    "crates/resource-graph",
+    "crates/observation-core",
+    "crates/sdk",
+    "crates/plugin-host",
+    "crates/kernel",
+    "crates/ipc",
+    "plugins/provider-docker",
+    "plugins/provider-multipass",
+    "plugins/provider-windows-sandbox",
+    "plugins/provider-docker-sandbox",
+    "plugins/feature-compose",
+    "apps/daemon",
+    "apps/cli",
+    "apps/plugin-worker",
+    "apps/probe-windows",
+    "tests/contract",
+    "tests/integration",
+    "tests/system",
+]
+
+[workspace.package]
+version = "1.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT OR Apache-2.0"
+authors = ["SandTree Project"]
+repository = "https://github.com/UlyssesLeoLee/SandTree"
+
+[workspace.dependencies]
+# --- internal crates ---
+sandtree-model = { path = "crates/model", version = "1.1.0" }
+sandtree-observation-model = { path = "crates/observation-model", version = "1.1.0" }
+sandtree-observation-core = { path = "crates/observation-core", version = "1.1.0" }
+sandtree-policy = { path = "crates/policy", version = "1.1.0" }
+sandtree-event = { path = "crates/event", version = "1.1.0" }
+sandtree-store = { path = "crates/store", version = "1.1.0" }
+sandtree-vfs = { path = "crates/vfs", version = "1.1.0" }
+sandtree-resource-graph = { path = "crates/resource-graph", version = "1.1.0" }
+sandtree-sdk = { path = "crates/sdk", version = "1.1.0" }
+sandtree-plugin-host = { path = "crates/plugin-host", version = "1.1.0" }
+sandtree-kernel = { path = "crates/kernel", version = "1.1.0" }
+sandtree-ipc = { path = "crates/ipc", version = "1.1.0" }
+sandtree-daemon = { path = "apps/daemon", version = "1.1.0" }
+sandtree-cli = { path = "apps/cli", version = "1.1.0" }
+sandtree-plugin-worker = { path = "apps/plugin-worker", version = "1.1.0" }
+sandtree-probe-windows = { path = "apps/probe-windows", version = "1.1.0" }
+
+# --- MUST baseline (schemas/technology_baseline.csv) ---
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "signal", "net"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+clap = { version = "4.6", features = ["derive", "env"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+blake3 = "1.8"
+async-trait = "0.1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+semver = { version = "1.0", features = ["serde"] }
+toml = "0.9"
+futures = "0.3"
+hex = "0.4"
+tempfile = "3"
+walkdir = "2"
+wasmtime = { version = "38", default-features = false, features = ["cranelift", "component-model", "async", "runtime", "std"] }
+wasmtime-wasi = "38"
+bollard = "0.18"
+uuid = { version = "1", features = ["v4", "serde"] }
+sha2 = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = "debuginfo"
+
+# UT/IT 必须快：测试配置单线程 debug 但启用优化
+[profile.test]
+opt-level = 1
+
+[profile.dev]
+opt-level = 0
+debug = 1

@@ -1,0 +1,46 @@
+﻿SandTree v1.1 Windows Chinese-system compatible package
+
+
+This package uses ASCII-only file and directory names to avoid ZIP filename mojibake on Windows.
+
+Document contents are unchanged; only archive member names and package manifests were rebuilt.
+
+
+Main documents:
+
+00_Package_Overview.docx = 全体成果物包总览
+
+01_Requirements_Definition.docx = 需求定义书
+
+02_Nonfunctional_Requirements.docx = 非功能需求定义书
+
+03_System_Architecture_Design.docx = 系统架构设计书
+
+04_Basic_Design.docx = 基本设计书
+
+05_Detailed_Design_Software.docx = 软件详细设计书
+
+06_Detailed_Design_Plugin_Provider.docx = Plugin / Provider 详细设计书
+
+07_Detailed_Design_Data_Interface.docx = Data / Interface 详细设计书
+
+08_Detailed_Design_Security_Operations.docx = Security / Operations 详细设计书
+
+09_OSS_Rust_Technology_License_Baseline.docx = OSS / Rust 技术选型与许可证基准
+
+10_Requirements_Design_Traceability.docx = 需求与设计追踪书
+
+11_Detailed_Design_Observation_Plane.docx = Observation Plane 详细设计书
+
+
+Test documents:
+
+tests/00_Overall_Test_Plan.docx = 综合测试计划书
+
+tests/01_UT_Unit_Test_Design.docx = UT 单元测试设计书
+
+tests/02_IT_Integration_Test_Design.docx = IT 集成测试设计书
+
+tests/03_ST_System_Test_Design.docx = ST 系统测试设计书
+
+tests/04_UAT_Acceptance_Test_Design.docx = UAT 验收测试设计书
