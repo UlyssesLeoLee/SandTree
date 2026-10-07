@@ -25,8 +25,6 @@
 //! Both WIT files are read-only to this lane; the comparison is `include_str!`
 //! only, nothing is written back.
 
-use crate::fixtures::{Fixture, LIFECYCLE_INTERFACE_1, RESOURCE_PROVIDER_INTERFACE_1};
-
 /// The frozen design artefact. Read-only (ADR-004, `mock/LANES.md` §4).
 pub const DESIGN_WIT: &str = include_str!("../../../schemas/sandtree_provider_v1.wit");
 
@@ -65,13 +63,22 @@ pub fn wit_copy_matches_design() -> bool {
 }
 
 /// The package declaration line of a WIT source.
+///
+/// The trailing `;` is WIT statement syntax, not part of the identity, so it is
+/// trimmed here. Leaving it on made this disagree with the fixture side, which
+/// derives the same string from an interface export name and has no terminator
+/// to strip — and a disagreement between the two is indistinguishable from a
+/// fixture that drifted onto a different package.
+#[cfg(test)]
 fn package_of(src: &str) -> Option<String> {
-    normalize(src, false)
-        .into_iter()
-        .find_map(|l| l.strip_prefix("package ").map(str::to_string))
+    normalize(src, false).into_iter().find_map(|l| {
+        l.strip_prefix("package ")
+            .map(|p| p.trim().trim_end_matches(';').trim().to_string())
+    })
 }
 
 /// The function names declared by one named WIT interface.
+#[cfg(test)]
 fn interface_functions(src: &str, interface: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut inside = false;
@@ -100,6 +107,7 @@ fn interface_functions(src: &str, interface: &str) -> Vec<String> {
 }
 
 /// The interface names and world of a WIT source, for conformance checking.
+#[cfg(test)]
 fn interfaces_of(src: &str) -> Vec<String> {
     normalize(src, false)
         .into_iter()
@@ -113,6 +121,7 @@ fn interfaces_of(src: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixtures::{Fixture, LIFECYCLE_INTERFACE_1, RESOURCE_PROVIDER_INTERFACE_1};
 
     /// Every WIT function this crate's fixtures lift, per interface.
     ///

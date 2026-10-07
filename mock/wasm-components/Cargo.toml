@@ -10,6 +10,11 @@ publish = false
 
 [dependencies]
 # Fixture data only. No product crate may depend on this one (mock/LANES.md).
+# serde itself is required, not just serde_json: the manifest and the
+# expectations it checks are derived types, so the derive macros and the
+# container attributes are part of the crate's surface, not an implementation
+# detail of the JSON calls.
+serde = { workspace = true }
 serde_json.workspace = true
 # Host-target wasmtime, feature-gated. It is never needed to *store* or *read* a
 # fixture; it is only what lets a test compile the WAT and assert the result

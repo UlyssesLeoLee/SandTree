@@ -17,7 +17,7 @@
 
 use serde::Deserialize;
 
-use crate::fixtures::{Expectation, Fixture};
+use crate::fixtures::Fixture;
 
 /// The manifest as committed.
 pub const MANIFEST_JSON: &str = include_str!("../MANIFEST.json");
@@ -36,18 +36,19 @@ pub struct Abi {
 }
 
 /// What the host must do with a fixture.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+///
+/// Unit variants on purpose: the manifest keeps the code and the rejecting
+/// check as sibling fields (`expected_code`, `rejected_at`) rather than nesting
+/// them inside the outcome, so a reader can see a rejection without unwrapping
+/// it and a manifest entry stays greppable. Those two fields are meaningless
+/// for an `accept`, which `every_entry_is_self_consistent` enforces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Outcome {
     /// Load it.
     Accept,
-    /// Refuse it with this stable code from `schemas/error_codes.csv`.
-    Reject {
-        /// Stable error code.
-        code: String,
-        /// The check that must produce it.
-        at: String,
-    },
+    /// Refuse it with the entry's `expected_code`, raised by `rejected_at`.
+    Reject,
 }
 
 /// One manifest entry.
@@ -100,15 +101,19 @@ impl Manifest {
         self.fixtures.iter().find(|e| e.id == fixture.name())
     }
 
-    /// The outcome the manifest requires, mapped onto [`Expectation`].
+    /// The rejection this entry declares, as `(code, check)` borrowed from the
+    /// manifest, or `None` when it expects the component to load.
     ///
-    /// This is the cross-check that matters: if `Fixture::expectation` and the
-    /// manifest ever disagree, the two are describing different worlds and a
-    /// host test driven by one would be asserting the wrong thing.
-    pub fn expectation_of(&self, entry: &Entry) -> Expectation {
-        match &entry.expected_outcome {
-            Outcome::Accept => Expectation::Accept,
-            Outcome::Reject { code, at } => Expectation::Reject { code, at, why: "" },
+    /// Not an [`Expectation`]: that type is `Copy` over `&'static str` because
+    /// it is compiled in, while the manifest is deserialized JSON that owns its
+    /// strings. The cross-check needs the values, not the shape.
+    pub fn expected_rejection<'e>(&self, entry: &'e Entry) -> Option<(&'e str, &'e str)> {
+        match entry.expected_outcome {
+            Outcome::Accept => None,
+            Outcome::Reject => Some((
+                entry.expected_code.as_deref().unwrap_or_default(),
+                entry.rejected_at.as_deref().unwrap_or_default(),
+            )),
         }
     }
 }

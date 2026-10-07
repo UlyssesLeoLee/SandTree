@@ -33,23 +33,41 @@ fn significant_lines(src: &str) -> Vec<String> {
         .collect()
 }
 
-/// A one-line description of what a fixture must differ from the valid one by.
-fn expected_deviation(fixture: Fixture) -> Option<(&'static str, &'static str)> {
+/// The line changes a derived fixture must differ from the valid one by.
+///
+/// A pair is (line in the valid fixture, line in the derived one); an empty
+/// second element means the line was removed. More than one pair is normal: a
+/// component declaring a foreign package exports *both* of its interfaces under
+/// it, and a world-version mismatch is wrong for both too, so a single-pair
+/// description would have forced the fixtures to be wrong instead of the test.
+fn expected_deviations(fixture: Fixture) -> Option<Vec<(&'static str, &'static str)>> {
     match fixture {
         // Namespace and version are the *only* intended differences.
-        Fixture::WrongPackageName => Some((
-            r#"(export "sandtree:plugin/lifecycle@1.0.0" (instance $lifecycle))"#,
-            r#"(export "evil:plugin/lifecycle@1.0.0" (instance $lifecycle))"#,
-        )),
-        Fixture::InterfaceVersionMismatch => Some((
-            r#"(export "sandtree:plugin/lifecycle@1.0.0" (instance $lifecycle))"#,
-            r#"(export "sandtree:plugin/lifecycle@2.0.0" (instance $lifecycle))"#,
-        )),
+        Fixture::WrongPackageName => Some(vec![
+            (
+                r#"(export "sandtree:plugin/lifecycle@1.0.0" (instance $lifecycle))"#,
+                r#"(export "evil:plugin/lifecycle@1.0.0" (instance $lifecycle))"#,
+            ),
+            (
+                r#"(export "sandtree:plugin/resource-provider@1.0.0" (instance $resource_provider))"#,
+                r#"(export "evil:plugin/resource-provider@1.0.0" (instance $resource_provider))"#,
+            ),
+        ]),
+        Fixture::InterfaceVersionMismatch => Some(vec![
+            (
+                r#"(export "sandtree:plugin/lifecycle@1.0.0" (instance $lifecycle))"#,
+                r#"(export "sandtree:plugin/lifecycle@2.0.0" (instance $lifecycle))"#,
+            ),
+            (
+                r#"(export "sandtree:plugin/resource-provider@1.0.0" (instance $resource_provider))"#,
+                r#"(export "sandtree:plugin/resource-provider@2.0.0" (instance $resource_provider))"#,
+            ),
+        ]),
         // Only the export is removed; the instance is still defined.
-        Fixture::MissingRequiredExport => Some((
+        Fixture::MissingRequiredExport => Some(vec![(
             r#"(export "sandtree:plugin/resource-provider@1.0.0" (instance $resource_provider))"#,
             "",
-        )),
+        )]),
         _ => None,
     }
 }
@@ -115,19 +133,17 @@ fn manifest_and_code_agree_on_every_outcome() {
     for f in Fixture::ALL {
         let e = m.entry(f).expect("entry");
         let from_code = f.expectation();
-        let from_manifest = m.expectation_of(e);
-        assert_eq!(
-            from_code.code(),
-            from_manifest.code(),
-            "{}: code and manifest disagree on the expected error code",
-            e.id
-        );
-        assert_eq!(
-            from_code.is_reject(),
-            from_manifest.is_reject(),
-            "{}: code and manifest disagree on accept vs reject",
-            e.id
-        );
+        match (from_code, m.expected_rejection(e)) {
+            (Expectation::Accept, None) => {}
+            (Expectation::Reject { code, at, .. }, Some((mcode, mat))) => {
+                assert_eq!(code, mcode, "{}: expected code drifted", e.id);
+                assert_eq!(at, mat, "{}: rejecting check drifted", e.id);
+            }
+            (from_code, from_manifest) => panic!(
+                "{}: fixture expects {from_code:?} but the manifest says {from_manifest:?}",
+                e.id
+            ),
+        }
         if let Expectation::Reject { code, at, .. } = from_code {
             assert_eq!(e.expected_code.as_deref(), Some(code), "entry {}", e.id);
             assert_eq!(e.rejected_at.as_deref(), Some(at), "entry {}", e.id);
@@ -171,9 +187,11 @@ fn only_the_valid_fixture_is_expected_to_load() {
 
 #[test]
 fn every_expected_code_exists_in_the_shipped_error_registry() {
-    // The manifest promises stable codes; they must be codes the repo ships.
+    // Every code a fixture expects must be a code the repo ships, or a host
+    // test asserting on it would be asserting on a string nothing produces.
+    // The manifest is not consulted here: `manifest_and_code_agree_on_every_outcome`
+    // already proves the manifest says the same thing.
     let registry = include_str!("../../../schemas/error_codes.csv");
-    let m = manifest::manifest();
     for f in Fixture::ALL {
         let Some(code) = f.expectation().code() else {
             continue;
@@ -188,18 +206,54 @@ fn every_expected_code_exists_in_the_shipped_error_registry() {
 
 #[test]
 fn every_reject_fixture_reports_a_distinct_cause() {
-    // Two fixtures sharing a code *and* a check would be testing one path twice.
-    let mut causes: Vec<(String, String)> = Fixture::ALL
+    // The *reason* must be distinct, not the (code, check) pair. There are only
+    // two host checks that can refuse a component, and four fixtures spread
+    // across them on purpose: two cases through one check is a check being
+    // tested twice, not one case being tested twice. The `why` is what
+    // distinguishes them, so that is what has to be unique.
+    let mut causes: Vec<(String, String, String)> = Fixture::ALL
         .iter()
         .filter_map(|f| match f.expectation() {
-            Expectation::Reject { code, at, .. } => Some((code.to_string(), at.to_string())),
+            Expectation::Reject { code, at, why } => {
+                Some((code.to_string(), at.to_string(), why.to_string()))
+            }
             Expectation::Accept => None,
         })
         .collect();
     let total = causes.len();
+    assert!(total >= 2, "a corpus of one reject fixture proves nothing");
     causes.sort();
     causes.dedup();
     assert_eq!(causes.len(), total, "two fixtures share a rejection cause");
+
+    // One check must report exactly one code. If `verify_component_package`
+    // produced two different codes for two fixtures, a host test asserting on
+    // the code could not tell which rule fired. Sharing a single code *across*
+    // checks is correct and expected: all four are "this component is refused".
+    let mut pairs: Vec<(String, String)> = Fixture::ALL
+        .iter()
+        .filter_map(|f| match f.expectation() {
+            Expectation::Reject { code, at, .. } => Some((at.to_string(), code.to_string())),
+            Expectation::Accept => None,
+        })
+        .collect();
+    pairs.sort();
+    let mut per_check: Vec<(String, String)> = Vec::new();
+    for (at, code) in pairs {
+        match per_check.iter_mut().find(|(seen, _)| *seen == at) {
+            Some((_, seen_code)) => assert_eq!(
+                *seen_code, code,
+                "check {at} reports two different codes; a host test asserting \
+                 on the code could not tell which rule fired"
+            ),
+            None => per_check.push((at, code)),
+        }
+    }
+    assert_eq!(
+        per_check.len(),
+        2,
+        "the corpus should exercise both host checks that can refuse a component"
+    );
 }
 
 #[test]
@@ -209,20 +263,42 @@ fn derived_fixtures_differ_from_the_valid_one_only_where_intended() {
     // about the namespace check.
     let valid = significant_lines(Fixture::ValidProviderComponent.wat());
     for f in Fixture::ALL.into_iter().filter(|f| f.is_derived()) {
-        let (expected_from, expected_to) = expected_deviation(f).expect("derived fixture");
+        let deviations = expected_deviations(f).expect("derived fixture");
         let other = significant_lines(f.wat());
 
-        let mut valid_only: Vec<&String> = valid.iter().filter(|l| !other.contains(l)).collect();
-        let mut other_only: Vec<&String> = other.iter().filter(|l| !valid.contains(l)).collect();
+        let mut valid_only: Vec<String> = valid
+            .iter()
+            .filter(|l| !other.contains(l))
+            .cloned()
+            .collect();
+        let mut other_only: Vec<String> = other
+            .iter()
+            .filter(|l| !valid.contains(l))
+            .cloned()
+            .collect();
         valid_only.sort();
         other_only.sort();
+
+        let mut expected_removed: Vec<String> = deviations
+            .iter()
+            .map(|(from, _)| (*from).to_string())
+            .collect();
+        let mut expected_added: Vec<String> = deviations
+            .iter()
+            .filter(|(_, to)| !to.is_empty())
+            .map(|(_, to)| (*to).to_string())
+            .collect();
+        expected_removed.sort();
+        expected_added.sort();
+
         assert_eq!(
-            valid_only,
-            vec![&expected_from.to_string()],
-            "{f}: unexpected extra lines"
+            valid_only, expected_removed,
+            "{f}: lines present in the valid fixture that this one should have kept"
         );
-        assert_eq!(other_only.len(), 1, "{f}: unexpected changed lines");
-        assert_eq!(other_only[0], &expected_to, "{f}: wrong change");
+        assert_eq!(
+            other_only, expected_added,
+            "{f}: lines changed beyond the declared deviation"
+        );
     }
 }
 
@@ -265,7 +341,7 @@ fn interface_names_derive_back_to_the_declared_package() {
         let derived = f
             .expected_exports()
             .iter()
-            .filter_map(|e| package_of(e).map(String::from))
+            .filter_map(|e| package_of(e))
             .next();
         match f.declared_package() {
             None => assert_eq!(
@@ -315,15 +391,51 @@ fn reject_fixtures_drop_exactly_the_interface_they_are_about() {
             .contains(&crate::fixtures::LIFECYCLE_INTERFACE_1),
         "missing-required-export must still export lifecycle"
     );
-    for f in [Fixture::WrongPackageName, Fixture::InterfaceVersionMismatch] {
+    // A foreign package: every export moves, and the declared package is not
+    // the accepted one. Nothing may be left behind under `sandtree:`, or the
+    // fixture would be exercising a mixed-namespace component instead.
+    let wrong = Fixture::WrongPackageName;
+    assert!(wrong.declared_package().is_some());
+    assert!(
+        wrong
+            .expected_exports()
+            .iter()
+            .all(|e| e.starts_with("evil:")),
+        "wrong-package-name must export everything under the foreign namespace"
+    );
+    assert!(
+        wrong
+            .expected_exports()
+            .iter()
+            .all(|e| !e.starts_with("sandtree:")),
+        "wrong-package-name must not also export under the accepted namespace"
+    );
+
+    // A version mismatch keeps the accepted namespace — that is the whole point
+    // of the fixture — and differs only in a major the host does not support.
+    // Asserting "nothing under sandtree:plugin" here would reject the only
+    // fixture that can tell a bad version apart from a bad package.
+    let supported = manifest::manifest().abi.supported_world_majors;
+    let mism = Fixture::InterfaceVersionMismatch;
+    assert!(mism.declared_package().is_some());
+    for e in mism.expected_exports() {
         assert!(
-            !f.expected_exports()
-                .iter()
-                .any(|e| e.starts_with("sandtree:plugin")),
-            "{} must not export anything under the accepted namespace",
-            f.name()
+            e.starts_with("sandtree:"),
+            "{e} must keep the accepted namespace; a foreign one belongs to the other fixture"
         );
-        assert!(f.declared_package().is_some());
+        let major: u64 = e
+            .rsplit('@')
+            .next()
+            .unwrap_or_default()
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .parse()
+            .unwrap_or_else(|_| panic!("{e} has no parseable major version"));
+        assert!(
+            !supported.contains(&major),
+            "{e} is major {major}, which the host accepts"
+        );
     }
 }
 

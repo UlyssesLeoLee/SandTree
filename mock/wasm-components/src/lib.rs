@@ -54,8 +54,16 @@
 
 pub mod fixtures;
 pub mod manifest;
-pub mod tests;
 pub mod wit_equivalence;
+
+/// Corpus tests that need no WASM engine.
+///
+/// `#[cfg(test)]` rather than a public module: these assertions are about this
+/// crate's own fixtures, so shipping them in the library's API would expose
+/// test scaffolding to callers and leave their imports unused in a non-test
+/// build.
+#[cfg(test)]
+mod tests;
 
 /// Live-engine validation of the corpus (default-OFF `engine` feature).
 #[cfg(feature = "engine")]
