@@ -17,6 +17,7 @@ pub mod loader;
 pub mod methods;
 pub mod packages;
 pub mod plugins;
+pub mod serve;
 pub mod worker_client;
 
 use std::path::PathBuf;

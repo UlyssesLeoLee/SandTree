@@ -83,13 +83,48 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
 
-        println!("sandtree-daemon listening on {}", daemon.pipe());
+        // Check the pipe is free *before* announcing readiness. Announcing first and
+        // failing to listen afterwards is how this daemon spent its life: it
+        // printed "listening" and then never accepted a client.
+        let pipe = daemon.pipe().to_string();
+        if let Err(e) = sandtree_daemon::serve::probe_pipe(&pipe).await {
+            eprintln!(
+                "sandtree-daemon: cannot take {}: {} — another daemon may be running",
+                pipe, e.message
+            );
+            return ExitCode::from(3);
+        }
+
+        println!("sandtree-daemon listening on {pipe}");
         let interval =
             std::time::Duration::from_millis(daemon.kernel().config().reconcile_interval_ms);
+        let mut ticker = tokio::time::interval(interval);
+        // The first tick fires immediately; skip it so a fresh daemon does not
+        // reconcile before it has answered anything.
+        ticker.tick().await;
+        // `serve_loop` keeps the pipe name claimed for as long as it runs, so
+        // there is no per-connection rebinding here.
+        let serving = sandtree_daemon::serve::serve_loop(
+            daemon.router().clone(),
+            pipe.clone(),
+            std::future::pending(),
+        );
+        let mut serving = Box::pin(serving);
         loop {
-            tokio::time::sleep(interval).await;
-            if let Err(e) = daemon.reconcile_once().await {
-                tracing::warn!(error = %e, "reconcile pass failed");
+            tokio::select! {
+                result = &mut serving => {
+                    // The loop only returns if `stop` resolves, which it never
+                    // does here, or if the pipe could not be kept. Either way
+                    // the daemon has lost its endpoint and must not keep
+                    // reconciling as though it were serving.
+                    tracing::error!(?result, "the IPC endpoint was lost; shutting down");
+                    return ExitCode::from(3);
+                }
+                _ = ticker.tick() => {
+                    if let Err(e) = daemon.reconcile_once().await {
+                        tracing::warn!(error = %e, "reconcile pass failed");
+                    }
+                }
             }
         }
     })
@@ -112,12 +147,21 @@ fn run_check(cfg: DaemonConfig) -> ExitCode {
             }
         };
         let gaps = daemon.coverage_gaps();
+        // Probing the pipe is part of the self-check: "the daemon can start"
+        // and "the daemon can actually listen" are different questions, and the
+        // packaging smoke test is exactly where the second one should be asked.
+        let probe = sandtree_daemon::serve::probe_pipe(daemon.pipe()).await;
         println!(
-            "pipe: {}\nmethods: {}\ngaps: {}",
+            "pipe: {}\nmethods: {}\ngaps: {}\npipe free: {}",
             daemon.pipe(),
             daemon.methods().len(),
-            gaps.len()
+            gaps.len(),
+            probe.is_ok()
         );
+        if let Err(e) = probe {
+            eprintln!("cannot take {}: {}", daemon.pipe(), e.message);
+            return ExitCode::from(3);
+        }
         if gaps.is_empty() {
             ExitCode::SUCCESS
         } else {

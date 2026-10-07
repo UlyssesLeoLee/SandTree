@@ -1,0 +1,4 @@
+   Compiling sandtree-ipc v1.1.0 (E:\SandTree\crates\ipc)
+   Compiling sandtree-daemon v1.1.0 (E:\SandTree\apps\daemon)
+   Compiling sandtree-cli v1.1.0 (E:\SandTree\apps\cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.50s

@@ -135,6 +135,36 @@ dev-dependency 把 gate 打开，于是「测着开了 gate 的构建、报告�
 `apps/daemon/src/worker_client.rs` 的 `transport_error()` 现在把 transport 层错误
 一律归一到 `PLUGIN_HEALTH_FAILED`，原始码留在 message 里。
 
+## 只测了错误分支的传输层，等于没测
+
+`NamedPipeTransport` 把管道放在 `Arc` 里、用 `Arc::get_mut` 拿 `&mut`，而 mutex guard
+仍持有引用，所以 **`get_mut` 永远返回 `None`**——连上之后每一次 `send`/`recv` 都失败。
+它的测试只覆盖「未连接」那条路径，因为那是唯一不用真管道就能到的路径。
+**这段代码从未搬运过一个字节。**
+
+这是「feature-gated 等于不在门禁里」的同族第三例：那次是**零调用方**。
+判据一样：**一条只有错误分支被测过的门禁，和一条什么都不测的门禁，在报告里长得一样。**
+所以：任何传输/适配层必须有一条**成功路径**的测试，哪怕它只能跑在某个平台上；
+`tests/system/tests/ipc_process.rs` 直接 spawn 真实二进制，因为只有子进程能抓住
+「`main` 忘了调用它」——进程内测试永远抓不到。
+
+## 假传输必须和真传输付同样的代价
+
+`Loopback::recv` 返回带长度前缀的原始字节，`NamedPipeTransport::recv` 会解帧。
+两者对「recv 返回什么」的说法不一致，于是**所有用 loopback 写的协议测试都在测一个
+production 没有的契约**——而 loopback 的文档当时恰好写着「每个 test target 在测不同的东西」，
+那句话是对的，只是没人把它当成对 loopback 的要求。
+
+修法：分帧归 `Transport` 所有（`send(body)` 内部加帧，`recv` 返回 body），
+调用方永远看不到前缀，于是**只有一个契约需要是对的**。
+配套钉死一条：`recv_yields_the_body_not_the_framed_bytes`。
+
+## 一个承诺了保证的名字，就是下一个人会依赖它的原因
+
+`probe_pipe` 原本叫 `claim`：它建完管道实例立刻丢掉，什么都没持有，
+但名字承诺了一个它不提供的独占性。改名是修法的一部分，不是文案。
+同理：`test` 必须会失败而不是挂住——挂住的门禁拖垮整个 suite 而不是报告自己。
+
 ## 提交与文档
 
 - 每个 crate 的改动须带 FR/NFR 追溯注释（`// FR-0xx` / `// NFR-xx`）。

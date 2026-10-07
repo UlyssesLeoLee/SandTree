@@ -734,3 +734,104 @@ tokio::spawn(async move { drop(server); });   // 异步 drop，与 send 竞争
 也就是说，**缺陷存在时那条测试是绿的**。它断言的是一个它只能一半时间观察到的类别。
 判据因此补一条：断言「某个错误类别」而不是「某个错误码」时，
 **必须把落点定死**——构造出确定的失败路径，否则这条断言的强度取决于调度器。
+---
+
+## ADR-020 让 daemon 真的监听,让 CLI 真的走管道
+
+**背景**。ADR-019 收尾时去查 FR-055 的进程边界,顺手查了 daemon 的 IPC 边界,
+发现的东西比 FR-055 大得多,而且性质相同:每一样东西都是对的,一样都到不了。
+
+- `apps/daemon/src/main.rs` 打印 `sandtree-daemon listening on <pipe>`,
+  然后进入 `sleep` + reconcile 循环。**没有创建管道,没有 accept,`daemon.router()` 永远收不到请求。**
+- `NamedPipeTransport` 被**零个调用方**使用(除了它自己的测试),并且它**没有 connect/accept 方法**——
+  内部那个 `handle` 永远是 `None`。
+- `apps/cli` 把 `--pipe` 和 `--local` 解析进 `CliConfig` 然后**从不使用**,每次都直接开本地
+  SQLite store 自己 dispatch。
+
+也就是说:整个仓的测试都在进程内调 `MethodRouter`,而那正是**运维和 CLI 实际用的那条边界之外**。
+`MethodRouter` 上每一个方法的处理器都存在且正确,只是没有任何进程够得着它。
+
+### 1. 缺陷:命名管道的连接路径从未执行过
+
+`NamedPipeTransport` 把管道放在 `Arc<NamedPipeServer>` 里,从 mutex guard 里 `.clone()`
+出来再用 `Arc::get_mut` 拿 `&mut`。但 guard 还持有一个活的引用,所以 **`get_mut` 永远返回 `None`**:
+
+```
+send/recv -> Err("named pipe handle is shared; a concurrent send is in progress")
+```
+
+**连上之后的每一次收发都失败。** 而「未连接」那一条路径是好的(它返回
+"not connected"),旧测试只测了那一条——因为那是唯一不用连管道就能到的路径。
+**这段代码从未搬运过一个字节,于是没有任何东西发现它。**
+
+这是 ADR-017 那条教训的第三个变体:那两次是「feature-gated 的代码不在门禁里」,
+这一次是**「零调用方的代码不在门禁里」**。判据相同——**一条只有错误分支被测过的门禁,
+和一条什么都不测的门禁,在报告里长得一模一样**。
+
+修法:管道直接放进 mutex,锁持到 IO 结束。协议本来就是严格交替的,每连接串行化不花钱。
+
+### 2. `Transport` 的契约本来是不一致的
+
+新增 `serve_connection` 时被自己的测试抓到:`Loopback::recv` 返回**带长度前缀的原始字节**,
+而 `NamedPipeTransport::recv` 会**解帧**。两者对 `recv` 到底返回什么的说法不一致,
+于是**所有用 loopback 写出来的协议测试都在测一个 production 没有的契约**。
+
+而 worker 协议(ADR-019)两端传的都是**未加帧的 JSON**——也就是说,真正需要修的是管道这一侧。
+
+修法:分帧归 `Transport` 所有。`send(body)` 内部加帧,`recv` 返回解帧后的 body。
+调用方永远看不到前缀,于是**只有一个契约需要是对的**,假传输才可能真正替换真传输。
+配套一条测试把这个不变量钉死(`recv_yields_the_body_not_the_framed_bytes`):
+假传输必须付和真传输一样的代价,否则它测的就不是同一件事。
+
+### 3. 方法分类:设计决定写下来,完备性由机器检查
+
+CLI 文档写着「没有 daemon 记录时不会假装 mutation 成功」——**这句话没有实现**:
+`OPERATION_INVOKE` 里没有任何「我是 daemon 吗」的判断,而本地 router 和 daemon router
+是同一个 `build_router`。
+
+需要一个「哪些方法会改持久状态」的清单。**它不按名字推断**(从 `list`/`get` 猜 read,
+和从注释推断门禁是同一类错误)。它是**写下来的设计决定**;被机器检查的是**完备性**:
+`every_method_is_classified_exactly_once` 断言 `MUTATING ⊆ ALL`、有序、不重复,
+且每个方法都能被分类。**新加一个方法而忘了分类,门禁就红。**
+
+未知方法按 mutating 处理:本 build 没听说过的调用,显然不是推理过安全性的那一类。
+
+### 4. 管道名称的持有:分两个轴,只有一个是好的
+
+实测(`the_endpoint_is_released_between_sessions_which_is_a_known_gap`):
+
+- **可用性窗口:已关闭。** `serve_loop` 用 tokio 官方写法——**先把下一个实例建好,
+  再去服务已连接的那个**,名字全程不空。修之前,两次连接之间名字是自由的,
+  CLI 会读到「没有 daemon」而 daemon 明明在跑。
+- **独占性窗口:未关闭(G2)。** `FILE_FLAG_FIRST_PIPE_INSTANCE` **不是租约**:
+  它只在「对方也是带这个标志建的实例」时拒绝。而 `serve_loop` 的替补实例**必须不带**
+  这个标志(否则 daemon 连自己的实例都换不了),所以任何进程都能占这个名字。
+  实测:第一个 daemon 正在服务会话时,第二个 daemon 的 `--check` 依然 exit 0。
+
+修法是带外声明——store 旁边的锁文件,或命名互斥体。记为 **G2**,不写成断言。
+
+一条**顺带**的纪律:`probe_pipe` 原本叫 `claim`。它建完实例立刻丢掉,根本没有持有任何东西,
+但名字承诺了一个它不提供的保证——**一个承诺了保证的名字,就是下一个人会依赖它的原因**。
+改名是修法的一部分,不是文案。
+
+### 5. 门禁
+
+`tests/system/tests/ipc_process.rs`(4 条,两个真实进程 + 真管道):
+daemon 真的应答 CLI、第二个 daemon 的自检、**没有 daemon 时 mutation 被拒绝**、
+只读命令回退本地且**必须说出来**。
+
+**缺二进制是失败,不是跳过。** `cargo test -p sandtree-system-tests` 不构建别的包的二进制;
+如果这里 skip,`st` gate 会报绿而其实一条没跑——**编译了零条的 gate 比没有 gate 更糟**。
+所以 `run_regression.ps1` 的 `st` 之前多一道 `st-build`,而测试里缺文件直接 panic 并打印该跑的命令。
+
+`crates/ipc/src/serve.rs`(7 条)在 loopback 上测,所以**每个平台的普通 `cargo test` 都会跑**;
+`crates/ipc/src/transport.rs`(4 条真管道测试)是 Windows 专属的那一半。
+
+### 6. 剩下的
+
+- **G2:端点独占性**。见上。带外锁。
+- **FR-055 的进程隔离**。`spawn` 仍是闭包 `Fn() -> Box<dyn Transport>`,
+  但现在闭包内可以真的 spawn 子进程并用 `NamedPipeClient` 连回来——
+  ADR-019 说的「只影响闭包内部」现在是字面意义上的。
+- **事件推送**。`event.subscribe` / `event.pull` 有处理器,但连接是请求/应答的;
+  服务端推送需要一个不属于这条简单循环的形状。

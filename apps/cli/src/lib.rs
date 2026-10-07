@@ -249,19 +249,51 @@ pub fn to_request(cmd: &Command) -> Option<Request> {
 
 /// A local in-process router, used when no daemon is reachable.
 ///
-/// Read-only commands work against it; a mutation fails with a precise error
-/// rather than running without a daemon to audit it.
+/// # Read-only, by construction
+///
+/// Read-only commands work against it. A mutation does not: the daemon is what
+/// records the change and its audit trail (NFR-S03), so a mutation applied from
+/// a CLI-local kernel would be a change with no record of who asked for it.
+///
+/// That refusal is **installed over the real handlers**, not left to a
+/// convention. Each mutating method is re-registered to refuse, and because
+/// `method::MUTATING` is checked against `method::ALL` in that crate's tests, a
+/// method added later cannot quietly become serveable without a daemon.
+///
+/// What it will not do is pretend a mutation succeeded without a daemon to
+/// record it.
 ///
 /// The plugin lifecycle state here uses the same refusing loader the daemon
 /// ships (ADR-016): the CLI has no worker transport either, and inventing a
-/// second answer for the same endpoint would make "why did install fail"
-/// depend on which process answered.
+/// second answer for the same endpoint would make "why did install fail" depend
+/// on which process answered.
 pub fn local_router(kernel: std::sync::Arc<sandtree_kernel::Kernel>) -> MethodRouter {
-    sandtree_daemon::methods::build_router(
+    let mut r = sandtree_daemon::methods::build_router(
         kernel,
         sandtree_daemon::plugins::PluginControl::unavailable(
             std::sync::Arc::new(sandtree_plugin_host::route::RouteTable::new()),
             "the local CLI router has no plugin worker transport",
+        ),
+    );
+    for m in method::ALL
+        .iter()
+        .copied()
+        .filter(|m| method::is_mutating(m))
+    {
+        r.register_sync(m, move |_| Err(mutation_needs_a_daemon(m)));
+    }
+    r
+}
+
+/// The refusal a mutation gets when there is no daemon to record it.
+pub fn mutation_needs_a_daemon(m: &str) -> sandtree_model::error::DomainError {
+    sandtree_model::error::DomainError::new(
+        sandtree_model::error::ErrorCode::POLICY_DENIED,
+        format!(
+            "{m} changes state, and the daemon is what records it and its audit \
+             trail. Start the daemon, or pass --pipe if it is already running on \
+             another endpoint. Running it from an in-process kernel would apply \
+             the change with no record of who asked for it."
         ),
     )
 }
@@ -269,6 +301,81 @@ pub fn local_router(kernel: std::sync::Arc<sandtree_kernel::Kernel>) -> MethodRo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn the_local_router_refuses_every_mutating_method() {
+        // The invariant, asserted against the real router rather than a
+        // reconstruction of it: a mutating method reached through the fallback
+        // path must come back as a policy refusal naming itself.
+        let dir = tempfile::tempdir().unwrap();
+        let kernel = std::sync::Arc::new(
+            sandtree_kernel::Kernel::bootstrap(sandtree_kernel::KernelConfig::new(dir.path()))
+                .await
+                .expect("kernel"),
+        );
+        let r = local_router(kernel);
+        let mut checked = 0usize;
+        for m in method::ALL
+            .iter()
+            .copied()
+            .filter(|m| method::is_mutating(m))
+        {
+            let resp = r.dispatch(&Request::new(m, Json::Null)).await;
+            assert!(
+                !resp.is_ok(),
+                "{m} is mutating and must not be served by a process that is not the daemon"
+            );
+            assert!(
+                resp.to_json()["error"]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains(m),
+                "the refusal must name the method it refused: {}",
+                resp.to_json()
+            );
+            assert_eq!(
+                resp.to_json()["error"]["code"],
+                Json::from(sandtree_model::error::ErrorCode::POLICY_DENIED.as_str()),
+                "{m} must be refused by policy, not by accident"
+            );
+            checked += 1;
+        }
+        assert!(checked >= 5, "only {checked} mutating methods were checked");
+    }
+
+    #[tokio::test]
+    async fn read_methods_still_work_without_a_daemon() {
+        // The refusal above must not turn the fallback into a wall: a read-only
+        // command is exactly the case the fallback exists for.
+        let dir = tempfile::tempdir().unwrap();
+        let kernel = std::sync::Arc::new(
+            sandtree_kernel::Kernel::bootstrap(sandtree_kernel::KernelConfig::new(dir.path()))
+                .await
+                .expect("kernel"),
+        );
+        let r = local_router(kernel);
+        for m in [
+            method::RESOURCE_TREE,
+            method::DIAGNOSTIC_VERSION,
+            method::DOCKER_ENDPOINTS,
+        ] {
+            assert!(r.contains(m), "{m} should be routed by the local router");
+        }
+    }
+
+    #[test]
+    fn the_refusal_names_the_method_and_is_not_retryable() {
+        let e = mutation_needs_a_daemon(method::OPERATION_INVOKE);
+        assert_eq!(e.code, sandtree_model::error::ErrorCode::POLICY_DENIED);
+        assert!(
+            e.message.contains(method::OPERATION_INVOKE),
+            "{}",
+            e.message
+        );
+        // Retrying cannot help: the daemon has to be started. Reporting this as
+        // retryable would send an operator into a retry loop.
+        assert!(!e.code.is_retryable(), "{} must not be retryable", e.code);
+    }
 
     fn argv(s: &str) -> Vec<String> {
         s.split_whitespace().map(str::to_string).collect()

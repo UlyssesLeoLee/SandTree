@@ -1,0 +1,25 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.13s
+     Running tests\ipc_process.rs (E:\DevCache\cargo\target-dev\debug\deps\ipc_process-117ab82d1284c0b3.exe)
+
+running 4 tests
+test a_read_only_call_still_works_with_no_daemon ... ok
+test a_mutation_with_no_daemon_is_refused_rather_than_applied ... ok
+test the_endpoint_is_released_between_sessions_which_is_a_known_gap ... ok
+test the_cli_gets_a_real_answer_from_a_real_daemon_over_a_real_pipe ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-5892563531c36fba.exe)
+
+running 8 tests
+test the_ipc_layer_survives_a_truncated_and_an_oversized_peer ... ok
+test a_runtime_outage_and_recovery_round_trips_cleanly ... ok
+test the_daemon_starts_on_a_machine_with_no_runtimes_installed ... ok
+test a_credentialed_endpoint_profile_is_refused_by_the_store ... ok
+test observation_trust_never_rises_across_an_outage ... ok
+test a_destructive_operation_is_confirmed_and_audited ... ok
+test a_genuine_deletion_is_visible_before_it_is_applied ... ok
+test a_daemon_session_completes_without_leaking_state ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

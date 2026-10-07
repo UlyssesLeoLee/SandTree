@@ -261,7 +261,9 @@ dist/SandTree-1.1.0-x64.msi     2.41 MB   安装程序，免提权
 | 真实 `.wasm` 组件产物 | 本机无 rustup shim，无法安装 `wasm32-wasip2` target 交叉编译 | `plugin-host` 的 component 加载路径由 WAT fixture 覆盖；ABI 由 `wit/` 与 `schemas/*.wit` 冻结 |
 | `Docker Sandboxes` 实验 API 真实联调 | 该 API 为 experimental | provider 以 capability probe + CLI 降级 + fixture 兜底实现（DD-PLG §8 明文要求的三级降级） |
 | `cargo deny check advisories` | 无 cargo-deny 二进制 | license/source 两项已由离线门禁覆盖；advisory（RustSec）一项未覆盖 |
-| plugin worker 进程隔离（FR-055） | daemon↔worker 协议、传输抽象与代理已落地并跨传输端到端测通（ADR-019）。worker 仍作为 task 跑在本进程内 | 子进程 spawn + 命名管道客户端 transport。`spawn` 是闭包 `Fn() -> Box<dyn Transport>`，控制平面与回滚语义不动；`apps/plugin-worker/src/main.rs` 仍是空的 `fn main()`，`crates/ipc` 只有 server 端 |
+| plugin worker 进程隔离（FR-055） | daemon↔worker 协议、传输抽象与代理已落地并跨传输端到端测通（ADR-019）。worker 仍作为 task 跑在本进程内 | 子进程 spawn。`spawn` 是闭包 `Fn() -> Box<dyn Transport>`，而 `NamedPipeClient` 现已可用（ADR-020），控制平面与回滚语义不动；`apps/plugin-worker/src/main.rs` 仍是空的 `fn main()` |
+
+| G2：IPC 端点独占性（NFR-S01） | daemon 真的监听并应答（ADR-020），`serve_loop` 也关掉了「两次连接之间名字空着」的可用性窗口。但 `FILE_FLAG_FIRST_PIPE_INSTANCE` 不是租约，只在对方也带该标志时拒绝，而 daemon 的替补实例必须不带——实测第二个 daemon 仍可占同一管道 | 需要带外声明：store 旁的锁文件或命名互斥体。已由 `tests/system/tests/ipc_process.rs` 的 `the_endpoint_is_released_between_sessions_which_is_a_known_gap` 持续观察 |
 
 ## 7.1 插件生命周期：机制已通，staging 待接（ADR-016）
 

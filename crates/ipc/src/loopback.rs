@@ -75,6 +75,15 @@ pub struct Loopback {
     wake: mpsc::UnboundedReceiver<()>,
     /// Used to wake the other end when `tx` or `rx` closes.
     peer_wake: mpsc::UnboundedSender<()>,
+    /// Per-transport framing state.
+    ///
+    /// This is the whole reason this transport is worth having. `recv` returns a
+    /// *decoded body*, exactly as [`crate::transport::NamedPipeTransport`] does.
+    /// An earlier version returned whatever bytes were in the mailbox, framed and
+    /// all — so the loopback and the pipe disagreed about what `recv` yields, and
+    /// every protocol test written against it was testing a contract production
+    /// does not have. A faithful fake has to pay the same cost as the real one.
+    decoder: crate::framing::FrameDecoder,
 }
 
 #[async_trait::async_trait]
@@ -88,14 +97,22 @@ impl Transport for Loopback {
                 "loopback peer is closed; the message would go nowhere",
             ));
         }
-        self.tx.push(bytes.to_vec(), &self.peer_wake);
+        // Framed here, decoded there: the same work the real transport does, so
+        // a frame that would be rejected on a pipe is rejected here too.
+        self.tx
+            .push(crate::framing::encode(bytes)?, &self.peer_wake);
         Ok(())
     }
 
     async fn recv(&mut self) -> Result<Option<Vec<u8>>, DomainError> {
         loop {
-            if let Some(bytes) = self.rx.pop() {
-                return Ok(Some(bytes));
+            if let Some(raw) = self.rx.pop() {
+                self.decoder.push(&raw)?;
+                if let Some(frame) = self.decoder.next_frame()? {
+                    return Ok(Some(frame));
+                }
+                // A partial frame: keep reading rather than reporting nothing.
+                continue;
             }
             if self.rx.is_closed() {
                 return Ok(None);
@@ -103,7 +120,14 @@ impl Transport for Loopback {
             // A closed channel also wakes the receiver, which is the wake-up we
             // want; the error itself carries no information.
             if self.wake.recv().await.is_none() {
-                return Ok(self.rx.pop());
+                let last = self.rx.pop();
+                match last {
+                    Some(raw) => {
+                        self.decoder.push(&raw)?;
+                        return self.decoder.next_frame();
+                    }
+                    None => return Ok(None),
+                }
             }
         }
     }
@@ -142,12 +166,14 @@ pub fn loopback_pair() -> (Loopback, Loopback) {
             rx: b_to_a.clone(),
             wake: recv_a,
             peer_wake: wake_b,
+            decoder: crate::framing::FrameDecoder::new(),
         },
         Loopback {
             tx: b_to_a,
             rx: a_to_b,
             wake: recv_b,
             peer_wake: wake_a,
+            decoder: crate::framing::FrameDecoder::new(),
         },
     )
 }
@@ -163,6 +189,49 @@ mod tests {
         a.send(b"two").await.unwrap();
         assert_eq!(b.recv().await.unwrap().as_deref(), Some(&b"one"[..]));
         assert_eq!(b.recv().await.unwrap().as_deref(), Some(&b"two"[..]));
+    }
+
+    /// The contract that makes this a usable stand-in for the pipe: `recv`
+    /// yields the **body**, with the length prefix stripped, exactly as
+    /// `NamedPipeTransport` does.
+    ///
+    /// When this transport returned the raw mailbox bytes, a protocol test
+    /// written against it would decode a length prefix that production has
+    /// already removed — and would pass while the real one failed.
+    #[tokio::test]
+    async fn recv_yields_the_body_not_the_framed_bytes() {
+        let (a, mut b) = loopback_pair();
+        let payload = b"{\"method\":\"diagnostic.version\"}";
+        a.send(payload).await.unwrap();
+        let got = b.recv().await.unwrap().expect("a frame");
+        assert_eq!(got, payload);
+        assert_ne!(
+            &got[..4],
+            &crate::framing::encode(payload).unwrap()[..4],
+            "the length prefix must not survive into the body"
+        );
+    }
+
+    /// A length prefix the real transport would reject is rejected here too.
+    #[tokio::test]
+    async fn an_oversized_frame_is_refused_rather_than_buffered() {
+        // Written straight into the mailbox, bypassing `send`, because that is
+        // what a hostile or corrupt peer looks like from the reader's side.
+        let (a, mut b) = loopback_pair();
+        let mut raw = ((crate::framing::MAX_FRAME_BYTES + 1) as u32)
+            .to_le_bytes()
+            .to_vec();
+        raw.extend_from_slice(b"payload");
+        a.tx.push(raw, &b.peer_wake);
+        let err = b
+            .recv()
+            .await
+            .expect_err("must not allocate its way to death");
+        assert!(
+            err.message.contains("frame"),
+            "the refusal must name the frame, got: {}",
+            err.message
+        );
     }
 
     #[tokio::test]

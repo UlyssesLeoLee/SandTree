@@ -1550,6 +1550,7 @@ dependencies = [
  "sandtree-model",
  "sandtree-plugin-host",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 

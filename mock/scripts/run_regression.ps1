@@ -259,6 +259,16 @@ if (Test-Path $engineLog) {
 $c = Invoke-Gate -Name 'it' -CargoArgs @('test', '-p', 'sandtree-integration-tests', '--offline')
 if ($c -ne 0) { $failures += 'it' }
 
+# The `st` target drives the real daemon and CLI binaries over a real named pipe
+# (tests/system/tests/ipc_process.rs). `cargo test -p sandtree-system-tests` does
+# not build another package's binaries, so without this step those tests would
+# fail on a missing file -- or, if the tests skipped instead, the gate would
+# report green having run none of them. Build first, then run.
+$c = Invoke-Gate -Name 'st-build' -CargoArgs @(
+    'build', '--offline', '-p', 'sandtree-daemon', '-p', 'sandtree-cli'
+)
+if ($c -ne 0) { $failures += 'st-build' }
+
 $c = Invoke-Gate -Name 'st' -CargoArgs @('test', '-p', 'sandtree-system-tests', '--offline')
 if ($c -ne 0) { $failures += 'st' }
 
@@ -296,6 +306,25 @@ $listed = @(Get-Content $inventory -Encoding utf8 | Where-Object { $_ -match ':\
 # they are subtracted rather than silently widening the gap.
 $doctests = @($listed | Where-Object { $_ -match '\s-\s' }).Count
 $owned = $listed.Count - $doctests
+
+# `-SkipContract` skips a gate, so its tests are in `owned` but no gate runs them
+# -- and the gap would then be reported on every single such run. A deliberate
+# skip that always produces a red coverage report is how people learn to ignore
+# coverage failures, so the skipped package is taken off the left-hand side too.
+#
+# The count comes from asking cargo, not from a hand-written number: a hard-coded
+# one drifts the moment the contract suite gains a test, and then the gap comes
+# back as a phantom that looks exactly like a real coverage hole.
+if ($SkipContract) {
+    $contractInventory = Join-Path $RunDir 'inventory-contract.log'
+    & cargo test -p sandtree-contract-tests --offline -- --list *>&1 |
+        Out-File -FilePath $contractInventory -Encoding utf8
+    $contractListed = @(Get-Content $contractInventory -Encoding utf8 | Where-Object { $_ -match ':\s+test$' })
+    $contractDoctests = @($contractListed | Where-Object { $_ -match '\s-\s' }).Count
+    $contractOwned = $contractListed.Count - $contractDoctests
+    $owned = $owned - $contractOwned
+    Write-Output ("                 minus {0} contract tests, excluded by -SkipContract" -f $contractOwned)
+}
 
 # `--list` on the default feature set omits every feature-gated test, so the
 # inventory above is a *subset* of what the workspace owns. The `engine` corpus

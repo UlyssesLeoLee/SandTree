@@ -1,8 +1,8 @@
 {
-  "run": "20261008-080450",
+  "run": "20261008-084428",
   "total_cases": 159,
-  "total_tests_executed": 1169,
-  "tests_passed": 1168,
+  "total_tests_executed": 1196,
+  "tests_passed": 1195,
   "tests_failed": 0,
   "tests_ignored": 1,
   "ignored_tests": [
@@ -16,6 +16,7 @@
     "mcp-channel": 0,
     "mock-engine": 0,
     "mock": 0,
+    "st-build": 0,
     "st": 0,
     "uat": 0,
     "ut": 0

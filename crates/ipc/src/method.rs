@@ -111,6 +111,58 @@ pub const ALL: &[&str] = &[
     WORKSPACE_WRITE,
 ];
 
+/// Methods that change durable state.
+///
+/// # Why this list exists
+///
+/// It answers one question: *may this call be served by a process that is not
+/// the daemon?* A CLI that falls back to an in-process kernel can answer
+/// "what resources exist", because a wrong answer costs an operator a retry.
+/// It may not answer `operation.invoke`, because the daemon is what records
+/// the mutation and its audit trail (NFR-S03); a mutation applied behind the
+/// daemon's back is a change with no record of who asked for it.
+///
+/// # What the list is and is not
+///
+/// It is a **design decision written down**, not something derived from method
+/// names — inferring "read" from verbs like `list`/`get` is the same mistake as
+/// inferring a gate from a comment. What *is* machine-checked is that the list is
+/// total: a test below fails if a new method is added to [`ALL`] without being
+/// classified, so a method cannot quietly escape the question.
+pub const MUTATING: &[&str] = &[
+    DOCKER_EXEC,
+    OPERATION_INVOKE,
+    PLUGIN_DISABLE,
+    PLUGIN_ENABLE,
+    PLUGIN_HOTSWAP,
+    PLUGIN_INSTALL,
+    PLUGIN_ROLLBACK,
+    SNAPSHOT_CREATE,
+    SNAPSHOT_DELETE,
+    SNAPSHOT_RESTORE,
+    WORKSPACE_WRITE,
+];
+
+/// Whether a method changes durable state.
+///
+/// Unknown methods are treated as **mutating**. A method this build has not
+/// heard of is, by definition, not one of the calls whose safety was reasoned
+/// about, so the safe default is the restrictive one.
+pub fn is_mutating(method: &str) -> bool {
+    if !is_well_formed(method) {
+        return true;
+    }
+    if !ALL.contains(&method) {
+        return true;
+    }
+    MUTATING.contains(&method)
+}
+
+/// Whether a method may be served without the daemon.
+pub fn is_read_only(method: &str) -> bool {
+    !is_mutating(method)
+}
+
 /// The family part of a method name, e.g. `resource` for `resource.tree`.
 pub fn family(method: &str) -> &str {
     method.split_once('.').map(|(f, _)| f).unwrap_or(method)
@@ -173,5 +225,59 @@ mod tests {
         assert!(!is_well_formed("family."));
         assert!(!is_well_formed("a.b.c"));
         assert!(is_well_formed("a.b"));
+    }
+
+    /// Every method is classified. Without this, adding a method to `ALL` and
+    /// forgetting `MUTATING` would silently make it serveable without a daemon,
+    /// which is exactly the hole the list exists to close.
+    #[test]
+    fn every_method_is_classified_exactly_once() {
+        let mut sorted = MUTATING.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(sorted, MUTATING.to_vec(), "MUTATING must stay sorted");
+        let unique: BTreeSet<&str> = MUTATING.iter().copied().collect();
+        assert_eq!(unique.len(), MUTATING.len(), "MUTATING must not repeat");
+
+        for m in ALL {
+            assert!(
+                is_well_formed(m),
+                "{m} is unclassifiable: it is not `family.verb`"
+            );
+        }
+        // Total and disjoint: classified ∪ rest = ALL, classified ∩ rest = {}.
+        for m in ALL {
+            let in_list = MUTATING.contains(m);
+            assert_eq!(
+                in_list,
+                is_mutating(m),
+                "{m} disagrees with the MUTATING list"
+            );
+        }
+        for m in MUTATING {
+            assert!(ALL.contains(m), "{m} is classified but is not a method");
+        }
+    }
+
+    #[test]
+    fn the_obvious_cases_are_classified_the_obvious_way() {
+        // Spot checks, so a future edit to the list that flips one of these is a
+        // deliberate act rather than a typo.
+        assert!(is_mutating(OPERATION_INVOKE));
+        assert!(is_mutating(WORKSPACE_WRITE));
+        assert!(is_mutating(PLUGIN_INSTALL));
+        assert!(!is_mutating(RESOURCE_TREE));
+        assert!(!is_mutating(DIAGNOSTIC_VERSION));
+        // Diffing two snapshots reads both; it does not create or restore one.
+        assert!(!is_mutating(SNAPSHOT_DIFF));
+        // Subscriptions are per-connection and leave nothing durable behind.
+        assert!(!is_mutating(EVENT_SUBSCRIBE));
+    }
+
+    /// The safe default is the restrictive one.
+    #[test]
+    fn an_unknown_or_malformed_method_is_treated_as_mutating() {
+        assert!(is_mutating("resource.teleport"));
+        assert!(is_mutating("nodots"));
+        assert!(!is_read_only("resource.teleport"));
     }
 }

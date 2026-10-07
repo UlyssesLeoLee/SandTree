@@ -23,3 +23,6 @@ sandtree-kernel.workspace = true
 sandtree-model.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+tempfile.workspace = true

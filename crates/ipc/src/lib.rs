@@ -19,6 +19,7 @@ pub mod framing;
 pub mod loopback;
 pub mod method;
 pub mod router;
+pub mod serve;
 pub mod transport;
 
 pub use framing::{
@@ -26,7 +27,8 @@ pub use framing::{
 };
 pub use method::*;
 pub use router::{Handler, MethodRouter, Response};
-pub use transport::{NamedPipeTransport, Transport};
+pub use serve::{call_once, decode_response, serve_connection};
+pub use transport::{NamedPipeClient, NamedPipeTransport, Transport, CONNECT_TIMEOUT_MS};
 
 use serde_json::Value as Json;
 
