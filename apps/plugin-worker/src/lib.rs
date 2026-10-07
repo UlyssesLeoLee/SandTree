@@ -161,26 +161,43 @@ impl Worker {
         #[cfg(feature = "wasmtime-abi")]
         {
             use sandtree_plugin_host::engine::{build_engine, ComponentGeneration};
+            use sandtree_sdk::manifest::PluginKind;
             let engine = build_engine(&self.spec.limits)?;
+            // The manifest is the authority on a package's role; the WIT
+            // descriptor carries only identity and state schema.
+            let kind = staged.manifest.kind();
             let runtime = ComponentGeneration::load(
                 &engine,
                 &bytes,
                 effective,
                 self.spec.limits,
                 self.spec.generation,
+                kind,
             )
             .await;
             // The engine must outlive the runtime, so it is leaked into the
             // worker's process lifetime deliberately: a generation is dropped
             // only at retirement, and the worker process is the boundary.
             std::mem::forget(engine);
-            // The grant is already baked into the generation's host state, so
-            // the routable bundle carries lifecycle only. A component exposes
-            // ports once the WIT adapter can hand them over.
-            let generation = LoadedGeneration::lifecycle_only(
+            let runtime = runtime?;
+
+            // A `provider-plugin` component exposes the resource port, so the
+            // routable bundle carries it. This is what lets the kernel discover,
+            // inspect and invoke a component the same way it would any other
+            // provider — before ADR-016 follow-up, a component could be staged
+            // and health-checked but never served a request.
+            let ports = match kind {
+                PluginKind::Provider => {
+                    sandtree_sdk::ports::ProviderInstance::empty(staged.plugin_id.clone())
+                        .with_resource(std::sync::Arc::new(runtime.clone()))
+                }
+                _ => sandtree_sdk::ports::ProviderInstance::empty(staged.plugin_id.clone()),
+            };
+            let generation = LoadedGeneration::new(
                 staged.plugin_id.clone(),
                 self.spec.generation,
-                runtime?,
+                runtime,
+                ports,
             );
             self.loaded = Some(generation.clone());
             self.state = WorkerState::Ready;

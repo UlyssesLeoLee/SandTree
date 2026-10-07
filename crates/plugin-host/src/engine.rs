@@ -22,7 +22,11 @@ use std::sync::Arc;
 
 use sandtree_model::capability::CapabilitySet;
 use sandtree_model::error::{DomainError, ErrorCode};
-use sandtree_sdk::ports::ProviderHealth;
+use sandtree_model::id::ResourceId;
+use sandtree_model::operation::{OperationOutcome, OperationRequest};
+use sandtree_model::resource::ResourceNode;
+use sandtree_sdk::manifest::PluginKind;
+use sandtree_sdk::ports::{DiscoverBatch, ProviderDescriptor, ProviderHealth, ResourceProvider};
 use sandtree_sdk::wit::WitDescriptor;
 use serde_json::Value as Json;
 use wasmtime::component::{Component, Linker};
@@ -121,12 +125,20 @@ pub struct ComponentGeneration {
     /// once here and cached — a descriptor is immutable for the life of a
     /// generation by definition.
     descriptor: WitDescriptor,
+    /// Provider role, from the manifest.
+    ///
+    /// Not in the WIT descriptor, which carries only identity and state schema.
+    /// The kernel routes by role (DD-PLG §2), so it has to come from somewhere
+    /// the operator declared rather than be guessed from the exports a
+    /// component happens to have.
+    kind: PluginKind,
 }
 
 impl std::fmt::Debug for ComponentGeneration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ComponentGeneration")
             .field("generation", &self.generation)
+            .field("kind", &self.kind)
             .field("fuel", &self.limits.fuel)
             .finish()
     }
@@ -146,6 +158,7 @@ impl ComponentGeneration {
         granted: CapabilitySet,
         limits: WorkerLimits,
         generation: Generation,
+        kind: PluginKind,
     ) -> Result<Arc<Self>, DomainError> {
         let component = Component::new(engine, component_bytes).map_err(|e| {
             DomainError::new(
@@ -198,6 +211,7 @@ impl ComponentGeneration {
             limits,
             generation,
             descriptor,
+            kind,
         }))
     }
 
@@ -211,6 +225,104 @@ impl ComponentGeneration {
             .map_err(|e| engine_error("failed to set the guest fuel budget", e))?;
         store.set_epoch_deadline(1);
         Ok(())
+    }
+
+    /// Decode a guest payload into a domain DTO.
+    ///
+    /// The WIT surface is JSON strings; the kernel wants typed DTOs. A guest that
+    /// returns something unparseable is a **failure**, never a default value —
+    /// folding a malformed reply into an empty batch or a default node would
+    /// report "no resources found" for a provider that is merely broken, which is
+    /// the collapse ADR-OBS-001 forbids.
+    fn decode<T: serde::de::DeserializeOwned>(
+        raw: String,
+        context: &'static str,
+    ) -> Result<T, DomainError> {
+        serde_json::from_str(&raw).map_err(|e| {
+            DomainError::new(
+                ErrorCode::CORE_INVALID,
+                format!("{context}: guest returned unparseable JSON ({e}): {raw:?}"),
+            )
+        })
+    }
+}
+
+/// `ResourceProvider` over the WIT `resource-provider` exports.
+///
+/// The WIT surface is three JSON-in/JSON-out calls; the kernel port is typed
+/// DTOs. Every method arms the guest before calling, because a call site that
+/// forgot would give a component an unbounded fuel budget with no guard rail —
+/// the containment story this engine exists to tell (FR-054). Keeping `arm` in
+/// each method is deliberate: a shared helper that took the closure would be
+/// shorter and would make the arming invisible at the call site.
+///
+/// `health` and `shutdown` delegate to the `GenerationRuntime` impl on the same
+/// value rather than re-calling the guest. The lifecycle export is the
+/// authority for those, and a second, subtly different interpretation of the
+/// same guest state is how a host ends up disagreeing with itself about whether
+/// a plugin is alive.
+#[async_trait::async_trait]
+impl ResourceProvider for ComponentGeneration {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor {
+            plugin_id: self.descriptor.plugin_id.clone(),
+            version: self.descriptor.version.clone(),
+            kind: self.kind,
+        }
+    }
+
+    async fn health(&self) -> Result<ProviderHealth, DomainError> {
+        GenerationRuntime::health(self).await
+    }
+
+    async fn discover(&self, cursor: Option<String>) -> Result<DiscoverBatch, DomainError> {
+        let mut store = self.store.lock().await;
+        self.arm(&mut store)?;
+        let raw = self
+            .bindings
+            .sandtree_plugin_resource_provider()
+            .call_discover(&mut *store, cursor.as_deref())
+            .map_err(|e| engine_error("resource-provider.discover trapped", e))?
+            .map_err(component_error)?;
+        Self::decode(raw, "resource-provider.discover")
+    }
+
+    async fn inspect(&self, id: &ResourceId) -> Result<ResourceNode, DomainError> {
+        let mut store = self.store.lock().await;
+        self.arm(&mut store)?;
+        let raw = self
+            .bindings
+            .sandtree_plugin_resource_provider()
+            .call_inspect(&mut *store, id.as_str())
+            .map_err(|e| engine_error("resource-provider.inspect trapped", e))?
+            .map_err(component_error)?;
+        Self::decode(raw, "resource-provider.inspect")
+    }
+
+    async fn invoke(&self, req: &OperationRequest) -> Result<OperationOutcome, DomainError> {
+        let mut store = self.store.lock().await;
+        self.arm(&mut store)?;
+        // The whole request travels as the payload: the WIT signature takes one
+        // JSON string, and the provider is the only thing that understands
+        // provider-specific args (DD-SW §4).
+        let payload = serde_json::to_string(req)
+            .map_err(|e| DomainError::new(ErrorCode::CORE_INVALID, e.to_string()))?;
+        let raw = self
+            .bindings
+            .sandtree_plugin_resource_provider()
+            .call_invoke(
+                &mut *store,
+                req.resource_id.as_str(),
+                req.op.as_str(),
+                &payload,
+            )
+            .map_err(|e| engine_error("resource-provider.invoke trapped", e))?
+            .map_err(component_error)?;
+        Self::decode(raw, "resource-provider.invoke")
+    }
+
+    async fn shutdown(&self) {
+        GenerationRuntime::shutdown(self).await
     }
 }
 
@@ -461,6 +573,7 @@ mod tests {
             CapabilitySet::empty(),
             LIMITS,
             Generation(1),
+            PluginKind::Provider,
         )
         .await
         .expect_err("garbage must not load");
@@ -478,6 +591,7 @@ mod tests {
             CapabilitySet::empty(),
             LIMITS,
             Generation(1),
+            PluginKind::Provider,
         )
         .await
         .expect_err("missing lifecycle must not load");
@@ -504,6 +618,54 @@ mod tests {
                 })
             });
         assert!(parsed.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_malformed_guest_reply_is_a_typed_error_not_an_empty_batch() {
+        // ADR-OBS-001: a provider that is broken must not be reported as a
+        // provider that found nothing. `DiscoverBatch::default()` is the trap —
+        // it decodes from nothing and would make a broken guest look like a
+        // clean scan of an empty system.
+        let err = ComponentGeneration::decode::<DiscoverBatch>(
+            "this is not json".to_string(),
+            "resource-provider.discover",
+        )
+        .expect_err("garbage must not decode");
+        assert_eq!(err.code, ErrorCode::CORE_INVALID);
+        assert!(
+            err.message.contains("resource-provider.discover"),
+            "the error must name the call that failed: {}",
+            err.message
+        );
+        assert!(
+            err.message.contains("this is not json"),
+            "the error must carry what the guest actually said: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn a_well_formed_reply_decodes_into_the_domain_type() {
+        // The positive side of the same contract, so the previous test is not
+        // passing merely because every input is rejected.
+        let batch: DiscoverBatch = ComponentGeneration::decode(
+            r#"{"resources":[],"relations":[]}"#.to_string(),
+            "discover",
+        )
+        .expect("valid payload");
+        assert!(batch.resources.is_empty());
+        assert!(batch.relations.is_empty());
+        assert!(batch.cursor.is_none());
+    }
+
+    #[test]
+    fn structurally_valid_json_of_the_wrong_shape_is_still_a_failure() {
+        // A guest returning `{}` for `discover` is as broken as one returning
+        // prose: serde will not fill the missing fields in, and that refusal
+        // is the behaviour we want rather than a silent default.
+        let err = ComponentGeneration::decode::<DiscoverBatch>("{}".to_string(), "discover")
+            .expect_err("missing required fields");
+        assert_eq!(err.code, ErrorCode::CORE_INVALID);
     }
 
     #[tokio::test]

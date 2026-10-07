@@ -17,17 +17,45 @@
 //! # Known state of the corpus
 //!
 //! Three of the four ABI-shaped fixtures compile as real components. The valid
-//! one does **not**: wasmtime rejects it with `instance not valid to be used as
-//! export`, because a Component Model component may only export a function
-//! whose value types are *named*, and exporting `descriptor-record` produces a
-//! freshly aliased type identity that `lifecycle.descriptor` does not reference.
-//! Getting that right needs an `(alias outer ...)` re-reference of the
-//! exported type, which is not something to guess at in hand-written WAT.
+//! one does **not**: wasmtime rejects it with
 //!
-//! That failure is pinned by
-//! [`tests::the_valid_fixture_is_blocked_on_the_named_type_export_rule`] rather
-//! than skipped, so it cannot turn into a silent regression and cannot be
-//! mistaken for a passing accept path.
+//! ```text
+//! failed to parse WebAssembly module
+//!   instance not valid to be used as export (at offset 0x7b1)
+//! ```
+//!
+//! **The cause is not established.** An earlier version of this file claimed the
+//! blocker was "a component may only export a function whose value types are
+//! named, and exporting `descriptor-record` produces a freshly aliased type
+//! identity". That was a guess, and it was checked and found wrong:
+//!
+//! * removing the top-level type exports entirely reproduces the *same*
+//!   `instance not valid to be used as export` error, so the type exports are
+//!   not what is rejected;
+//! * re-referencing the types with `(alias outer N (eq $t))` — the remedy that
+//!   diagnosis implies — does not parse at all, because `outer` is a core alias
+//!   kind and is not valid in a component type position.
+//!
+//! So the rejection is about the **instance export**, and nothing here says why.
+//! The remaining candidates are the canonical-ABI shapes the lifted functions
+//! declare (for example `(result (error string))` for `result<_, string>`) or
+//! the `canon lift` option sets. Distinguishing them needs a component
+//! toolchain, not more guessing against an error that reports only a byte
+//! offset.
+//!
+//! Two consequences worth stating plainly:
+//!
+//! 1. **The host's `ResourceProvider` adapter is not covered end to end.** Its
+//!    decode contract (a malformed guest reply is a typed error, never an empty
+//!    batch) is unit-tested in `crates/plugin-host`; the propagation through
+//!    `discover` / `inspect` / `invoke` is not, because driving those needs a
+//!    component that binds. Until this fixture compiles, "a WASM component can
+//!    serve provider traffic" is unproven.
+//! 2. The failure is **pinned, not skipped**, by
+//!    [`tests::the_valid_fixture_is_blocked_on_the_named_type_export_rule`] — a
+//!    name that is now historical: it asserts the failure, not the rule — so it
+//!    cannot turn into a silent regression and cannot be mistaken for a passing
+//!    accept path.
 //!
 //! # What this proves, and what it does not
 //!

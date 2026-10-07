@@ -285,3 +285,36 @@ supervisor 是完整且被测试的，却**在产品上不可达**。本轮：
 
 `traceability/requirements_to_tests.csv` 记录 FR/NFR → 测试 ID 映射；
 新增实现必须补一行映射，并在代码中以 `// FR-xxx` / `// NFR-xx` 标注落点。
+## 7.2 WIT `resource-provider` 适配：已实现，但端到端未覆盖（2026-10-08）
+
+`ComponentGeneration` 此前只实现 `GenerationRuntime`：绑定了 `provider-plugin` world，
+却**一次都没调用过** `resource-provider` 导出。一个 WASM 组件因此能被 stage、能过
+health、能参与热插拔，但**不能为 kernel 服务任何 provider 流量**。
+
+本轮补上 `ResourceProvider` 实现（`discover` / `inspect` / `invoke`，JSON ↔ 领域 DTO），
+`Worker::load` 按 manifest 的 `kind` 把 resource port 挂进 `LoadedGeneration`，
+`kind=Provider` 的组件从此对 kernel 可路由。
+
+**但「WASM 组件能真正当 provider」这件事没有被证明。** 本仓不存在一个能编译并绑定的
+`provider-plugin` 组件，而造一个需要 component-model ABI 精度：
+
+- 现有 fixture `mock/wasm-components/fixtures/valid_provider_component.wat` 编译失败于
+  `instance not valid to be used as export`；
+- 该 fixture 文档里写的病因（命名类型导出的身份别名）**经实测是错的**：去掉顶层类型导出
+  复现同一个错误，而其推论出的解法 `(alias outer ...)` 在 component 类型位置根本不解析
+  （`outer` 是 core alias kind）。已把该文档改成记录「病因未定」与两次否证过程。
+
+已覆盖 / 未覆盖，界线很清楚：
+
+| 部分 | 状态 |
+| --- | --- |
+| `decode` 契约（guest 返回垃圾 → typed error，绝不折叠成空批次） | ✅ 3 条单测 |
+| `ResourceNode` / `OperationOutcome` 不可 `Default` | ✅ 编译期结构保证：想写「失败即默认值」过不了编译 |
+| `discover` / `inspect` / `invoke` 把 decode 错误传播出去 | ❌ **无覆盖**——需要一个能绑定的组件 |
+
+第三行是刻意的诚实标注。已验证：把 `discover` 改成 `.or_else(|_| Ok(DiscoverBatch::default()))`
+后，现有单测**仍然全绿**——因为它们直接测 `decode`，没有一条驱动 `discover`。测试的覆盖面
+没有跟着改动走，这里不能算「已验证」。
+
+**解阻条件**：一个能编译的 `provider-plugin` 组件。有了它，`discover` 的传播断言才能写，
+WASM provider 路径才算端到端可用。
