@@ -52,21 +52,35 @@ fn rejection(raw: &str) -> String {
     }
 }
 
-/// A minimal world body, used as the base for the validation table below.
-fn minimal(extra: &str) -> String {
-    format!(
-        r#"{{
-            "schema": 1,
-            "intent": "minimal",
-            "plugin": "sandtree.provider.mock",
-            "resources": [{{
+/// The single resource [`minimal`] starts from.
+const BASE_RESOURCE: &str = r#"{
                 "key": "a",
                 "id_parts": ["a"],
                 "kind": "container",
                 "name": "a",
                 "state": "running",
                 "last_seen": "2026-10-07T00:00:00Z"
-            }}]{extra}
+            }"#;
+
+/// A minimal world body, used as the base for the validation table below.
+///
+/// `extra` adds *sibling* fields (`files`, `operations`, `exec`, `health`, …).
+/// It must not add a `resources` key of its own: a second one would make the
+/// document invalid JSON, and the test would then be asserting a parse error
+/// instead of the validation rule it is named after. Use [`with_resources`] when
+/// the resource list itself is what is under test.
+fn minimal(extra: &str) -> String {
+    with_resources(BASE_RESOURCE, extra)
+}
+
+/// A minimal world whose `resources` array is given in full.
+fn with_resources(resources: &str, extra: &str) -> String {
+    format!(
+        r#"{{
+            "schema": 1,
+            "intent": "minimal",
+            "plugin": "sandtree.provider.mock",
+            "resources": [{resources}]{extra}
         }}"#
     )
 }
@@ -95,9 +109,13 @@ fn an_empty_plugin_name_is_refused() {
 #[test]
 fn a_repeated_key_and_a_repeated_identity_are_different_mistakes() {
     // Two resources answering to the same fixture key: one of them is unreachable.
-    let dupe_key = minimal(
-        r#", "resources": [{"key": "a", "id_parts": ["x"], "kind": "container",
-             "name": "b", "state": "running", "last_seen": "2026-10-07T00:00:00Z"}]"#,
+    let dupe_key = with_resources(
+        &format!(
+            r#"{BASE_RESOURCE},
+                {{"key": "a", "id_parts": ["x"], "kind": "container",
+                  "name": "b", "state": "running", "last_seen": "2026-10-07T00:00:00Z"}}"#
+        ),
+        "",
     );
     assert!(
         rejection(&dupe_key).contains("duplicate key"),
@@ -106,9 +124,13 @@ fn a_repeated_key_and_a_repeated_identity_are_different_mistakes() {
     );
 
     // Two keys sharing one derived id: `inspect` would be ambiguous.
-    let shared_id = minimal(
-        r#", "resources": [{"key": "b", "id_parts": ["a"], "kind": "image",
-             "name": "b", "state": "running", "last_seen": "2026-10-07T00:00:00Z"}]"#,
+    let shared_id = with_resources(
+        &format!(
+            r#"{BASE_RESOURCE},
+                {{"key": "b", "id_parts": ["a"], "kind": "image",
+                  "name": "b", "state": "running", "last_seen": "2026-10-07T00:00:00Z"}}"#
+        ),
+        "",
     );
     assert!(
         rejection(&shared_id).contains("shares an identity"),
@@ -119,10 +141,14 @@ fn a_repeated_key_and_a_repeated_identity_are_different_mistakes() {
 
 #[test]
 fn a_dangling_parent_and_a_parent_cycle_are_both_refused() {
-    let dangling = minimal(
-        r#", "resources": [{"key": "b", "id_parts": ["b"], "kind": "container", "name": "b",
-             "state": "running", "parent": "ghost",
-             "last_seen": "2026-10-07T00:00:00Z"}]"#,
+    let dangling = with_resources(
+        &format!(
+            r#"{BASE_RESOURCE},
+                {{"key": "b", "id_parts": ["b"], "kind": "container", "name": "b",
+                  "state": "running", "parent": "ghost",
+                  "last_seen": "2026-10-07T00:00:00Z"}}"#
+        ),
+        "",
     );
     assert!(
         rejection(&dangling).contains("unknown parent key"),
@@ -312,14 +338,17 @@ fn resources_are_emitted_parent_first_with_siblings_in_derived_id_order() {
     let w = world();
     let names: Vec<&str> = w.resources().iter().map(|r| r.name.as_str()).collect();
     assert_eq!(names.len(), 5);
-    assert_eq!(
-        w.resources()
-            .iter()
-            .filter(|r| r.parent_id.is_none())
-            .count(),
-        1,
-        "exactly one parentless resource, so the tree is connected"
-    );
+    // Two roots, not one: a Docker network is a top-level resource, not a
+    // child of the engine, and the graph is a forest by design. Asserting a
+    // single root would be asserting a shape this fixture does not have.
+    let mut roots: Vec<&str> = w
+        .resources()
+        .iter()
+        .filter(|r| r.parent_id.is_none())
+        .map(|r| r.name.as_str())
+        .collect();
+    roots.sort_unstable();
+    assert_eq!(roots, vec!["bridge", "docker-engine"]);
     assert_eq!(names[0], "docker-engine", "the root comes first");
 
     // Topological: no child may precede its parent.
@@ -570,12 +599,21 @@ fn a_resource_declared_capability_set_is_a_ceiling() {
 
 #[test]
 fn an_empty_capability_list_means_no_declared_ceiling() {
-    // `nginx` declares `[]`, so the ceiling check must not fire; the operation
-    // then fails for the *different* reason that the fixture never scripted it.
+    // `nginx` declares `[]`. The ceiling check must therefore be skipped, and
+    // `start` is scripted, so the call succeeds — a non-empty declared set
+    // would have refused `resource:start` outright.
     let w = world();
     assert!(w.node(&nginx()).expect("nginx").capabilities.is_empty());
-    let err = w
+    let ok = w
         .invoke(&req(&nginx(), OperationKind::Start, json!({})))
+        .expect("an empty ceiling must not refuse");
+    assert_eq!(ok.state, OperationState::Succeeded);
+
+    // The same resource with an operation the fixture never scripted. Getting
+    // as far as the scripting layer at all is the proof the ceiling was
+    // skipped rather than merely satisfied.
+    let err = w
+        .invoke(&req(&nginx(), OperationKind::Pause, json!({})))
         .expect_err("no scripted outcome");
     assert_eq!(err.code, ErrorCode::CORE_INVALID, "{err}");
     assert!(err.message.contains("no scripted outcome"), "{err}");
@@ -583,12 +621,47 @@ fn an_empty_capability_list_means_no_declared_ceiling() {
 
 #[test]
 fn an_unscripted_operation_is_an_error_rather_than_a_silent_success() {
+    // A resource that *does* declare the capability, with only `start`
+    // scripted. The ceiling passes, so the refusal has to come from the
+    // scripting layer; anything else would be the ceiling answering for it.
+    let raw = with_resources(
+        r#"{"key": "a", "id_parts": ["a"], "kind": "container", "name": "a",
+            "state": "running", "capabilities": ["resource:start", "resource:pause"],
+            "last_seen": "2026-10-07T00:00:00Z"}"#,
+        r#", "operations": [{"op": "start", "outcome": {"state": "succeeded"}}]"#,
+    );
+    let w = load(&raw).expect("loads");
+    let a = ResourceId::derive(&["a"]);
+
+    // Control: the scripted operation on the same resource works.
+    assert_eq!(
+        w.invoke(&req(&a, OperationKind::Start, json!({})))
+            .expect("start is scripted")
+            .state,
+        OperationState::Succeeded
+    );
+
+    let err = w
+        .invoke(&req(&a, OperationKind::Pause, json!({})))
+        .expect_err("pause is not scripted");
+    assert_eq!(err.code, ErrorCode::CORE_INVALID, "{err}");
+}
+
+#[test]
+fn a_declared_capability_still_does_not_invent_an_outcome() {
+    // The counterpart to the unscripted-operation test above: `web` declares
+    // start/stop/destroy/exec but *not* restart, so the ceiling answers first.
+    // Asserting the code here is what keeps the two failure sources distinct —
+    // a policy refusal and a missing script are different bugs.
     let w = world();
     let err = w
         .invoke(&req(&web(), OperationKind::Restart, json!({})))
         .unwrap_err();
-    assert_eq!(err.code, ErrorCode::CORE_INVALID);
-    assert!(err.message.contains("restart"), "{err}");
+    assert_eq!(err.code, ErrorCode::POLICY_DENIED, "{err}");
+    assert!(
+        err.message.contains("does not declare"),
+        "the refusal must name the ceiling, not the missing script: {err}"
+    );
 }
 
 #[test]

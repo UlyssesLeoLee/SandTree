@@ -193,14 +193,15 @@ impl WorkspaceFs {
 
     /// Direct children of a directory, in path order.
     ///
-    /// A root entry's [`FileEntry::parent_path`] is `None`, not `Some("")`, so
-    /// the root directory is matched explicitly. Without this, listing a
-    /// workspace root returns nothing at all while listing `src` works — the
-    /// asymmetry that makes an empty root listing look like an empty workspace.
+    /// Two things a root entry does that a subdirectory entry does not: its
+    /// [`FileEntry::parent_path`] is `None` rather than `Some("")`, and listing
+    /// the root must not return the root. Hence the explicit root match and the
+    /// `e.path != dir` guard — without the first, a root listing returns
+    /// nothing; without the second, it returns the root as its own child.
     pub fn children(&self, dir: &str) -> Vec<&FileEntry> {
         self.entries
             .values()
-            .filter(|e| e.parent_path().unwrap_or("") == dir)
+            .filter(|e| e.path != dir && e.parent_path().unwrap_or("") == dir)
             .collect()
     }
 
@@ -284,7 +285,15 @@ impl WorkspaceFs {
                                 "symlink chain at {prefix:?} exceeds {MAX_SYMLINK_HOPS} hops"
                             )));
                         }
+                        // The target folds against the link's own directory, so
+                        // the result is already a path from the workspace root
+                        // and it *includes* the prefix walked so far. Re-seeding
+                        // the walk with it is therefore the only correct move:
+                        // appending it to the prefix would turn
+                        // `workspace` + `app/ok.txt` into
+                        // `workspace/workspace/app/ok.txt`.
                         let expanded = fold_target(&resolved, &target)?;
+                        resolved.clear();
                         for seg in expanded.into_iter().rev() {
                             pending.push_front(seg);
                         }
