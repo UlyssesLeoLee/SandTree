@@ -1,0 +1,24 @@
+[package]
+name = "sandtree-mock-wasm-components"
+description = "SandTree mock: hand-written WAT component fixtures for the plugin host ABI (FR-054, ADR-004)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# Fixture data only. No product crate may depend on this one (mock/LANES.md).
+serde_json.workspace = true
+# Host-target wasmtime, feature-gated. It is never needed to *store* or *read* a
+# fixture; it is only what lets a test compile the WAT and assert the result
+# against a real engine. Off by default because the crate's whole reason to
+# exist is to be usable on a machine that cannot build guest wasm at all.
+wasmtime = { workspace = true, optional = true, features = ["wat"] }
+
+[dev-dependencies]
+
+[features]
+default = []
+engine = ["dep:wasmtime"]
