@@ -1,0 +1,26 @@
+[package]
+name = "sandtree-mock-observation"
+description = "SandTree mock Observation Plane: scripted ObservationProvider with deterministic fault injection (mock project Lane B; ADR-OBS-001, ADR-OBS-003)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Domain DTOs and the provider port only. No provider SDK, no database, no
+# runtime binding (NFR-O02): the mock is reachable from kernel tests without any
+# of those, which is exactly the property NFR-O02 exists to protect.
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# Fixture timestamps are validated as RFC3339 rather than shape-matched, so a
+# typo in a fixture fails at load time instead of reaching a snapshot.
+chrono.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
