@@ -1012,7 +1012,15 @@ mod tests {
         assert!(!h.control_is_available());
     }
 
+    // Needs a live Docker Engine on the default pipe, so it is not part of the
+    // default gate: a developer without Docker Desktop would otherwise see a
+    // red suite for a reason that has nothing to do with this code. Run it with
+    //   cargo test --workspace -- --ignored
+    // on a machine where the engine is up. Everything else in this module is
+    // hermetic, including every degradation test, which addresses a pipe that
+    // cannot exist.
     #[tokio::test]
+    #[ignore = "requires a running Docker Engine on the default named pipe"]
     async fn health_reports_a_usable_engine_as_healthy() {
         // The mirror image of the degradation path: a reachable Engine is
         // reported healthy, so a permanent "unavailable" cannot hide a working
