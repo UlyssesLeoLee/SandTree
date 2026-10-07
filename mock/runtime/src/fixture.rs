@@ -21,7 +21,7 @@ use sandtree_model::operation::{OperationKind, OperationState};
 use sandtree_model::resource::{RelationKind, ResourceKind, ResourceState};
 use sandtree_sdk::manifest::PluginKind;
 use sandtree_sdk::ports::ProviderHealth;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value as Json;
 
 /// Fixture schema version understood by this crate.
@@ -358,7 +358,7 @@ const RELATION_KINDS: &[&str] = &[
 ];
 
 /// Accept `docker-runtime` and `docker_runtime` alike.
-fn de_resource_kind<'de, D: Deserialize<'de>>(d: D) -> Result<ResourceKind, D::Error> {
+fn de_resource_kind<'de, D: Deserializer<'de>>(d: D) -> Result<ResourceKind, D::Error> {
     let raw = String::deserialize(d)?;
     let wire = RESOURCE_KINDS
         .iter()
@@ -377,7 +377,7 @@ fn accepted(raw: &str, wire: &str) -> bool {
     raw == wire || raw == wire.replace('-', "_")
 }
 
-fn de_resource_state<'de, D: Deserialize<'de>>(d: D) -> Result<ResourceState, D::Error> {
+fn de_resource_state<'de, D: Deserializer<'de>>(d: D) -> Result<ResourceState, D::Error> {
     let raw = String::deserialize(d)?;
     RESOURCE_STATES
         .iter()
@@ -386,7 +386,7 @@ fn de_resource_state<'de, D: Deserialize<'de>>(d: D) -> Result<ResourceState, D:
         .ok_or_else(|| serde::de::Error::custom(format!("unknown resource state {raw:?}")))
 }
 
-fn de_operation_state<'de, D: Deserialize<'de>>(d: D) -> Result<OperationState, D::Error> {
+fn de_operation_state<'de, D: Deserializer<'de>>(d: D) -> Result<OperationState, D::Error> {
     let raw = String::deserialize(d)?;
     OPERATION_STATES
         .iter()
@@ -395,7 +395,7 @@ fn de_operation_state<'de, D: Deserialize<'de>>(d: D) -> Result<OperationState, 
         .ok_or_else(|| serde::de::Error::custom(format!("unknown operation state {raw:?}")))
 }
 
-fn de_relation_kind<'de, D: Deserialize<'de>>(d: D) -> Result<RelationKind, D::Error> {
+fn de_relation_kind<'de, D: Deserializer<'de>>(d: D) -> Result<RelationKind, D::Error> {
     let raw = String::deserialize(d)?;
     let wire = RELATION_KINDS
         .iter()
@@ -478,16 +478,14 @@ mod tests {
 
     #[test]
     fn relation_kind_accepts_hyphen_form_and_rejects_rubbish() {
-        let rel: RelationSpec = serde_json::from_str(r#"{"from":"a","to":"b","kind":"uses-image"}"#)
-            .expect("hyphen form");
+        let rel: RelationSpec =
+            serde_json::from_str(r#"{"from":"a","to":"b","kind":"uses-image"}"#)
+                .expect("hyphen form");
         assert_eq!(rel.kind, RelationKind::UsesImage);
         let bad =
             serde_json::from_str::<RelationSpec>(r#"{"from":"a","to":"b","kind":"uses_image"}"#)
                 .unwrap_err();
-        assert!(
-            bad.to_string().contains("unknown relation kind"),
-            "{bad}"
-        );
+        assert!(bad.to_string().contains("unknown relation kind"), "{bad}");
     }
 
     #[test]
@@ -524,7 +522,10 @@ mod tests {
         let text = serde_json::to_string(&f).expect("serialize");
         let again = WorldFixture::from_json_str(&text).expect("reparse");
         assert_eq!(f, again);
-        assert_eq!(f.resources[0].capabilities, vec!["resource:start".to_string()]);
+        assert_eq!(
+            f.resources[0].capabilities,
+            vec!["resource:start".to_string()]
+        );
         assert_eq!(f.resources[0].metadata["endpoint_id"], Json::from("ep-abc"));
     }
 
@@ -538,7 +539,10 @@ mod tests {
     fn error_codes_must_come_from_the_shipped_registry() {
         assert!(parse_error_code("ST-DKR-001").is_ok());
         let err = parse_error_code("ST-FAKE-001").unwrap_err();
-        assert!(matches!(err, FixtureError::UnknownErrorCode { .. }), "{err}");
+        assert!(
+            matches!(err, FixtureError::UnknownErrorCode { .. }),
+            "{err}"
+        );
     }
 
     #[test]

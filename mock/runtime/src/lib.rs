@@ -56,9 +56,13 @@ pub mod world;
 pub use exec_provider::ScriptedExecProvider;
 pub use file_provider::ScriptedFileProvider;
 pub use fixture::{
-    DiscoverFault, ExecSpec, FileSpec, FixtureError, OperationOutcomeSpec, OperationSpec,
-    RelationSpec, ResourceSpec, ScriptedError, WorldFixture, FIXTURE_SCHEMA,
+    parse_error_code, parse_operation_kind, DiscoverFault, ExecSpec, FileSpec, FixtureError,
+    OperationOutcomeSpec, OperationSpec, RelationSpec, ResourceSpec, ScriptedError, WorldFixture,
+    FIXTURE_SCHEMA,
 };
-pub use fleet::{discover_all, ProviderDiscovery, ProviderFailure};
+pub use fleet::{discover_all, FailurePhase, FleetDiscovery, ProviderDiscovery, ProviderFailure};
 pub use resource_provider::ScriptedResourceProvider;
-pub use world::ScriptedWorld;
+pub use world::{
+    ExecRule, FileEntry, ScriptedWorld, WorkspaceFs, CURSOR_PREFIX, DEFAULT_PROVIDER_VERSION,
+    MAX_CAPTURE_BYTES, MAX_SYMLINK_HOPS, MOCK_GENERATION,
+};
