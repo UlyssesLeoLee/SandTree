@@ -1,5 +1,6 @@
 [package]
 name = "sandtree-provider-docker-sandbox"
+description = "Docker Sandbox provider: three-tier degradation per DD-PLG 8 (API -> CLI -> fixture), guest-probe trust ceiling (DD-PLG 12.2)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,4 +8,13 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
