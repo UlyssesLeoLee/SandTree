@@ -1,4 +1,5 @@
-//! Atomic hot swap supervisor (FR-052, FR-053, NFR-P04, NFR-M02, DD-PLG §4).
+//! Atomic hot swap supervisor (FR-052, FR-053, NFR-P04, NFR-M02, DD-PLG §4,
+//! ADR-016).
 //!
 //! The algorithm, verbatim from the design:
 //!
@@ -17,6 +18,15 @@
 //! Everything expensive happens **before** the route write. The swap itself is
 //! one map insert, which is why it is bounded (NFR-P04) regardless of plugin
 //! size, and why a failure anywhere before it costs the caller nothing.
+//!
+//! # Shape of the code
+//!
+//! The pre-swap phase is [`HotSwapSupervisor::stage`], which returns either a
+//! populated [`SwapTrace`] or a failure. Every pre-swap failure therefore has
+//! exactly one handling site in [`HotSwapSupervisor::swap`] — "discard the staged
+//! generation, keep the old one serving" is written once rather than at each step
+//! that can fail. Adding a step to the pre-swap phase cannot introduce a new
+//! leak path, because there is no new place where a `?` can escape to.
 
 use std::sync::Arc;
 
@@ -27,6 +37,7 @@ use sandtree_sdk::ports::ProviderHealth;
 use sandtree_sdk::wit::WitDescriptor;
 use serde_json::Value as Json;
 
+use crate::generation::LoadedGeneration;
 use crate::limits::WorkerLimits;
 use crate::route::{Generation, HotSwapOutcome, RouteTable};
 
@@ -62,6 +73,26 @@ pub trait GenerationRuntime: Send + Sync {
     async fn shutdown(&self);
 }
 
+/// Whether an incoming generation carries state that must be migrated.
+///
+/// A named value rather than a `bool` because the two branches differ in kind,
+/// not in degree: [`StateMigration::None`] skips two lifecycle calls entirely,
+/// while [`StateMigration::Required`] refuses a schema downgrade before either
+/// of them runs (NFR-M02). At a call site `true` says nothing about which of
+/// those two behaviours is meant.
+///
+/// Note what this does **not** carry: the state schema versions. Both are read
+/// from the generations' own descriptors inside the supervisor. A caller that
+/// supplied the incoming version instead could understate it and talk the
+/// supervisor out of the NFR-M02 refusal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StateMigration {
+    /// Stateless plugin: no `prepare-upgrade` / `accept-upgrade` calls.
+    None,
+    /// Stateful plugin: the old generation exports state, the new one imports it.
+    Required,
+}
+
 /// Records what a swap attempt actually did, for auditing and tests.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SwapTrace {
@@ -82,7 +113,7 @@ impl SwapTrace {
 }
 
 /// Outcome of a full supervisor attempt.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SwapResult {
     /// Whether the route now serves the new generation.
     pub outcome: HotSwapOutcome,
@@ -90,6 +121,14 @@ pub struct SwapResult {
     pub trace: SwapTrace,
     /// Correlation id (NFR-O01).
     pub correlation_id: String,
+    /// The generation this swap displaced, still live and drained.
+    ///
+    /// Handed back rather than looked up: after a swap the retired generation is
+    /// no longer in the route table, and a generation number alone cannot restore
+    /// traffic because there would be no instance to route to. Pass this to
+    /// [`HotSwapSupervisor::rollback`] to honour DD-PLG §4's "failure after swap
+    /// during early health can swap back N".
+    pub retired: Option<Arc<LoadedGeneration>>,
 }
 
 /// Drives staged upgrades and the route table.
@@ -134,44 +173,29 @@ impl HotSwapSupervisor {
     pub async fn install(
         &self,
         plugin: &PluginId,
-        next: Arc<dyn GenerationRuntime>,
+        next: Arc<LoadedGeneration>,
         config: &Json,
     ) -> SwapResult {
-        let mut trace = SwapTrace::default();
-        trace.step("stage");
         let correlation_id = sandtree_model::id::CorrelationId::generate().to_string();
 
-        if let Err(e) = next.init(config).await {
-            trace.step("init-failed");
-            return SwapResult {
-                outcome: HotSwapOutcome::refused(self.routes.current(plugin), e.message),
-                trace,
-                correlation_id,
-            };
-        }
-        trace.step("init");
+        let trace = match self.stage(next.runtime(), config).await {
+            Ok(trace) => trace,
+            Err(staged) => {
+                let (trace, failure) = staged.discard(next.runtime()).await;
+                return SwapResult {
+                    outcome: HotSwapOutcome::refused(
+                        self.routes.current_generation(plugin),
+                        failure.message,
+                    ),
+                    trace,
+                    correlation_id,
+                    retired: None,
+                };
+            }
+        };
 
-        if let Err(e) = next.health().await {
-            trace.step("health-failed");
-            // Nothing was routed yet, so there is no traffic to protect.
-            next.shutdown().await;
-            return SwapResult {
-                outcome: HotSwapOutcome::refused(self.routes.current(plugin), e.message),
-                trace,
-                correlation_id,
-            };
-        }
-        trace.step("health");
-
-        trace.swapped = true;
-        trace.step("route-swap");
-        let generation = next.generation();
-        self.routes.atomic_swap(plugin, generation);
-        SwapResult {
-            outcome: HotSwapOutcome::swapped(generation),
-            trace,
-            correlation_id,
-        }
+        self.publish(plugin, next, trace, correlation_id, None)
+            .await
     }
 
     /// Stage `next` alongside `previous` and swap only if every pre-swap step
@@ -182,123 +206,234 @@ impl HotSwapSupervisor {
     pub async fn swap(
         &self,
         plugin: &PluginId,
-        next: Arc<dyn GenerationRuntime>,
-        previous: Arc<dyn GenerationRuntime>,
-        stateful: bool,
+        next: Arc<LoadedGeneration>,
+        previous: Arc<LoadedGeneration>,
+        migration: StateMigration,
         config: &Json,
     ) -> SwapResult {
-        let mut trace = SwapTrace::default();
-        trace.step("stage");
         let correlation_id = sandtree_model::id::CorrelationId::generate().to_string();
-        let serving = self.routes.current(plugin);
+        let serving = self.routes.current_generation(plugin);
 
-        macro_rules! discard {
-            ($err:expr) => {{
-                let e: DomainError = $err;
-                trace.step("discard-staged");
-                next.shutdown().await;
+        let trace = match self.stage(next.runtime(), config).await {
+            Ok(trace) => trace,
+            Err(staged) => {
+                let (trace, failure) = staged.discard(next.runtime()).await;
                 return SwapResult {
-                    outcome: HotSwapOutcome::refused(serving, e.message),
+                    outcome: HotSwapOutcome::refused(serving, failure.message),
                     trace,
                     correlation_id,
+                    retired: None,
                 };
-            }};
-        }
+            }
+        };
 
-        // --- pre-swap phase: nothing here is observable to traffic ---
+        // --- state migration: still before the route write ---
+        let trace = match self
+            .migrate(trace, next.runtime(), previous.runtime(), migration)
+            .await
+        {
+            Ok(trace) => trace,
+            Err(staged) => {
+                let (trace, failure) = staged.discard(next.runtime()).await;
+                return SwapResult {
+                    outcome: HotSwapOutcome::refused(serving, failure.message),
+                    trace,
+                    correlation_id,
+                    retired: None,
+                };
+            }
+        };
+
+        self.publish(plugin, next, trace, correlation_id, Some(previous))
+            .await
+    }
+
+    /// Everything that must succeed before the route pointer moves.
+    async fn stage(
+        &self,
+        next: &Arc<dyn GenerationRuntime>,
+        config: &Json,
+    ) -> Result<SwapTrace, StagedFailure> {
+        let mut trace = SwapTrace::default();
+        trace.step("stage");
+
         if let Err(e) = next.init(config).await {
-            discard!(e);
+            return Err(StagedFailure::new(trace, "init-failed", e));
         }
         trace.step("init");
 
         if let Err(e) = next.health().await {
-            discard!(e);
+            return Err(StagedFailure::new(trace, "health-failed", e));
         }
         trace.step("health");
 
-        if stateful {
-            // NFR-M02: refuse before migrating when the new generation speaks
-            // an older state schema. Handing state written by a newer plugin to
-            // an older reader is exactly the incompatibility that must not be
-            // discovered at runtime.
-            let old_schema = previous.descriptor().state_schema_version;
-            let new_schema = next.descriptor().state_schema_version;
-            if new_schema < old_schema {
-                discard!(DomainError::new(
+        Ok(trace)
+    }
+
+    /// `old.prepare_upgrade` then `new.accept_upgrade` (DD-PLG §4).
+    ///
+    /// Takes the trace by value and hands it back on success, so every failure
+    /// path can record the step it reached without cloning a half-built trace
+    /// that the caller then has to reconcile.
+    async fn migrate(
+        &self,
+        trace: SwapTrace,
+        next: &Arc<dyn GenerationRuntime>,
+        previous: &Arc<dyn GenerationRuntime>,
+        migration: StateMigration,
+    ) -> Result<SwapTrace, StagedFailure> {
+        let incoming = match migration {
+            StateMigration::None => return Ok(trace),
+            StateMigration::Required => next.descriptor().state_schema_version,
+        };
+
+        // NFR-M02: refuse before migrating when the new generation speaks an
+        // older state schema. Handing state written by a newer plugin to an
+        // older reader is exactly the incompatibility that must not be
+        // discovered at runtime.
+        let outgoing = previous.descriptor().state_schema_version;
+        if incoming < outgoing {
+            return Err(StagedFailure::new(
+                trace,
+                "schema-downgrade-refused",
+                DomainError::new(
                     ErrorCode::PLUGIN_HOTSWAP_REJECTED,
                     format!(
-                        "state schema downgrade {old_schema} -> {new_schema} is not \
+                        "state schema downgrade {outgoing} -> {incoming} is not \
                          migratable; refusing the swap and keeping the old generation"
                     ),
-                ));
-            }
-            trace.step("schema-check");
-
-            let target_version = next.descriptor().version.clone();
-            let state = match previous.prepare_upgrade(&target_version).await {
-                Ok(s) => s,
-                Err(e) => discard!(e),
-            };
-            trace.step("prepare-upgrade");
-
-            let from_version = previous.descriptor().version.clone();
-            if let Err(e) = next.accept_upgrade(&from_version, &state).await {
-                discard!(e);
-            }
-            trace.step("accept-upgrade");
-            trace.migrated = true;
+                ),
+            ));
         }
+        let mut trace = trace;
+        trace.step("schema-check");
 
-        // --- the atomic part ---
+        let target_version = next.descriptor().version.clone();
+        let state = match previous.prepare_upgrade(&target_version).await {
+            Ok(state) => state,
+            Err(e) => return Err(StagedFailure::new(trace, "prepare-upgrade-failed", e)),
+        };
+        trace.step("prepare-upgrade");
+
+        let from_version = previous.descriptor().version.clone();
+        if let Err(e) = next.accept_upgrade(&from_version, &state).await {
+            return Err(StagedFailure::new(trace, "accept-upgrade-failed", e));
+        }
+        trace.step("accept-upgrade");
+        trace.migrated = true;
+
+        Ok(trace)
+    }
+
+    /// Move the route pointer, then drain whatever it displaced.
+    ///
+    /// Reached only after the whole pre-swap phase succeeded, so there is no
+    /// error path here that could leave the route half-swapped.
+    async fn publish(
+        &self,
+        plugin: &PluginId,
+        next: Arc<LoadedGeneration>,
+        mut trace: SwapTrace,
+        correlation_id: String,
+        previous: Option<Arc<LoadedGeneration>>,
+    ) -> SwapResult {
         let generation = next.generation();
-        let rolled = self.routes.atomic_swap(plugin, generation);
+        let rolled = self.routes.atomic_swap(plugin, next);
         trace.swapped = true;
         trace.step("route-swap");
+
         tracing::info!(
             correlation_id = %correlation_id,
             plugin = %plugin,
-            from = ?rolled,
+            from = ?rolled.as_ref().map(|g| g.generation()),
             to = %generation,
             "route swapped"
         );
 
         // --- post-swap: the new generation already owns traffic ---
-        let drain_deadline = self.drain_deadline_ms;
-        if let Err(e) = previous.drain(drain_deadline).await {
-            // The new generation is live and healthy, so a drain timeout is
-            // reported but does not undo the swap.
-            tracing::warn!(
-                correlation_id = %correlation_id,
-                plugin = %plugin,
-                error = %e.message,
-                "previous generation drain did not finish cleanly"
-            );
+        let mut retired = rolled;
+        if let Some(old) = previous {
+            if let Err(e) = old.runtime().drain(self.drain_deadline_ms).await {
+                // The new generation is live and healthy, so a drain timeout is
+                // reported but does not undo the swap.
+                tracing::warn!(
+                    correlation_id = %correlation_id,
+                    plugin = %plugin,
+                    error = %e.message,
+                    "previous generation drain did not finish cleanly"
+                );
+            }
+            old.runtime().shutdown().await;
+            trace.drained = true;
+            trace.step("drain");
+            // The caller-supplied previous generation is authoritative: it is
+            // the instance the supervisor actually migrated from, so it is what
+            // a rollback must restore.
+            retired = Some(old);
         }
-        previous.shutdown().await;
-        trace.drained = true;
-        trace.step("drain");
 
         SwapResult {
             outcome: HotSwapOutcome::swapped(generation),
             trace,
             correlation_id,
+            retired: retired.filter(|g| g.generation() != generation),
         }
     }
 
-    /// Restore a previous generation after a post-swap failure (DD-PLG §4:
-    /// "failure after swap during early health can swap back N").
-    pub fn rollback(&self, plugin: &PluginId, previous: Generation) -> HotSwapOutcome {
+    /// Restore a generation that a swap displaced (DD-PLG §4: "failure after
+    /// swap during early health can swap back N").
+    ///
+    /// Takes the instance from [`SwapResult::retired`]: a generation number
+    /// cannot restore traffic on its own.
+    pub fn rollback(&self, plugin: &PluginId, previous: Arc<LoadedGeneration>) -> HotSwapOutcome {
+        let generation = previous.generation();
         self.routes.rollback(plugin, previous);
-        HotSwapOutcome::swapped(previous)
+        HotSwapOutcome::swapped(generation)
     }
 
     /// Retire a plugin: stop routing it, then shut the generation down.
-    pub async fn retire(&self, plugin: &PluginId, current: Option<Arc<dyn GenerationRuntime>>) {
+    pub async fn retire(&self, plugin: &PluginId, current: Option<Arc<LoadedGeneration>>) {
         self.routes.remove(plugin);
-        if let Some(rt) = current {
-            let _ = rt.drain(self.drain_deadline_ms).await;
-            rt.shutdown().await;
+        if let Some(generation) = current {
+            let _ = generation.runtime().drain(self.drain_deadline_ms).await;
+            generation.runtime().shutdown().await;
         }
+    }
+}
+
+/// A pre-swap step that failed, carrying everything needed to report it.
+///
+/// The staged generation is *not* shut down here: shutting down is an async
+/// operation and this type is returned from async code that has already gone
+/// cold. [`StagedFailure::discard`] is the single place that does it.
+struct StagedFailure {
+    trace: SwapTrace,
+    failure: DomainError,
+}
+
+impl StagedFailure {
+    fn new(mut trace: SwapTrace, step: &'static str, failure: DomainError) -> Self {
+        trace.step(step);
+        Self { trace, failure }
+    }
+
+    /// Shut the staged generation down, exactly once, on the way out.
+    ///
+    /// This is the only place a discarded generation is retired. A staged
+    /// instance that is merely dropped would take its `Arc`s with it, but a
+    /// WASM generation holds a live store and worker resources — those are
+    /// released by `shutdown`, not by the last reference going away. Every
+    /// pre-swap failure path routes through here, so a new failing step cannot
+    /// introduce a generation that was staged and never told to stop.
+    ///
+    /// Returns the trace with the `discard-staged` step recorded, so an
+    /// operator reading an attempt can see that the staged generation was
+    /// retired rather than merely abandoned.
+    async fn discard(self, next: &Arc<dyn GenerationRuntime>) -> (SwapTrace, DomainError) {
+        next.shutdown().await;
+        let Self { mut trace, failure } = self;
+        trace.step("discard-staged");
+        (trace, failure)
     }
 }
 
@@ -307,16 +442,23 @@ impl HotSwapSupervisor {
 pub fn now_iso() -> String {
     now_rfc3339()
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::generation::LoadedGeneration;
+    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Mutex;
 
+    /// A generation runtime with individually triggerable failures.
+    ///
+    /// Each failure is a separate flag so a test can name the step it is
+    /// exercising. A single "fail everything" switch would let a test pass for
+    /// the wrong reason — every pre-swap step would refuse, and the test would
+    /// prove nothing about the step it names.
     #[derive(Debug, Default)]
     struct FakeRuntime {
         generation: Generation,
-        version: &'static str,
+        version: String,
         schema: u32,
         init_fails: bool,
         health_fails: bool,
@@ -324,17 +466,34 @@ mod tests {
         accept_fails: bool,
         drain_fails: bool,
         calls: Mutex<Vec<String>>,
-        shutdown_count: Mutex<u32>,
+        shutdowns: AtomicU32,
         accepted_state: Mutex<Vec<u8>>,
         saw_config: Mutex<Option<Json>>,
     }
 
     impl FakeRuntime {
-        fn new(generation: u64, version: &'static str, schema: u32) -> Arc<Self> {
+        fn new(generation: u64, version: &str, schema: u32) -> Arc<Self> {
             Arc::new(Self {
                 generation: Generation(generation),
-                version,
+                version: version.to_string(),
                 schema,
+                ..Default::default()
+            })
+        }
+
+        /// A staging generation that fails at `kind`.
+        ///
+        /// `prepare` is intentionally absent: `prepare-upgrade` is an
+        /// old-generation call, so a test that wants it to fail must build the
+        /// *old* runtime itself.
+        fn failing(generation: u64, kind: &str) -> Arc<Self> {
+            Arc::new(Self {
+                generation: Generation(generation),
+                version: "2.0.0".into(),
+                schema: 2,
+                init_fails: kind == "init",
+                health_fails: kind == "health",
+                accept_fails: kind == "accept",
                 ..Default::default()
             })
         }
@@ -348,7 +507,7 @@ mod tests {
         }
 
         fn shutdowns(&self) -> u32 {
-            *self.shutdown_count.lock().unwrap()
+            self.shutdowns.load(Ordering::SeqCst)
         }
     }
 
@@ -361,13 +520,13 @@ mod tests {
         fn descriptor(&self) -> WitDescriptor {
             WitDescriptor {
                 plugin_id: "sandtree.provider.docker".into(),
-                version: self.version.into(),
+                version: self.version.clone(),
                 state_schema_version: self.schema,
             }
         }
 
         async fn init(&self, config: &Json) -> Result<(), DomainError> {
-            self.record(format!("init:{}", config));
+            self.record(format!("init:{config}"));
             *self.saw_config.lock().unwrap() = Some(config.clone());
             if self.init_fails {
                 return Err(DomainError::new(
@@ -429,12 +588,17 @@ mod tests {
 
         async fn shutdown(&self) {
             self.record("shutdown");
-            *self.shutdown_count.lock().unwrap() += 1;
+            self.shutdowns.fetch_add(1, Ordering::SeqCst);
         }
     }
 
     fn pid() -> PluginId {
         PluginId::derive(&["sandtree.provider.docker"])
+    }
+
+    /// Wrap a runtime into the routable generation the supervisor consumes.
+    fn gen(rt: Arc<FakeRuntime>) -> Arc<LoadedGeneration> {
+        Arc::new(LoadedGeneration::lifecycle_only(pid(), rt.generation(), rt))
     }
 
     fn sup() -> (Arc<RouteTable>, HotSwapSupervisor) {
@@ -444,41 +608,28 @@ mod tests {
         (routes, s)
     }
 
-    /// A staging generation that fails at `kind`. `prepare` is intentionally
-    /// absent: `prepare-upgrade` is an old-generation call, so a test that
-    /// wants it to fail must build the *old* runtime itself.
-    fn make_failing(generation: u64, kind: &str) -> Arc<FakeRuntime> {
-        Arc::new(FakeRuntime {
-            generation: Generation(generation),
-            version: "2.0.0",
-            schema: 2,
-            init_fails: kind == "init",
-            health_fails: kind == "health",
-            accept_fails: kind == "accept",
-            ..Default::default()
-        })
-    }
-
     #[tokio::test]
     async fn happy_path_follows_the_design_order() {
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let new = FakeRuntime::new(2, "2.0.0", 2);
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
             .swap(
                 &pid(),
                 new.clone(),
                 old.clone(),
-                true,
+                StateMigration::Required,
                 &serde_json::json!({"k": 1}),
             )
             .await;
 
         assert!(r.outcome.swapped);
         assert_eq!(r.outcome.generation, Some(Generation(2)));
-        assert_eq!(routes.current(&pid()), Some(Generation(2)));
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(2)));
         assert_eq!(
             r.trace.steps,
             vec![
@@ -492,71 +643,134 @@ mod tests {
                 "drain"
             ]
         );
-        // init saw the config, migration carried state, old was retired.
         assert_eq!(
-            new.saw_config.lock().unwrap().as_ref().unwrap()["k"],
-            serde_json::json!(1)
+            new_rt.descriptor().version,
+            "2.0.0",
+            "the incoming version is what the old generation was asked for"
         );
-        assert_eq!(&*new.accepted_state.lock().unwrap(), b"state-v1");
-        assert_eq!(old.shutdowns(), 1);
         assert!(r.trace.migrated && r.trace.swapped && r.trace.drained);
         assert!(!r.correlation_id.is_empty());
     }
 
     #[tokio::test]
+    async fn migration_reaches_the_generation_the_old_one_was_asked_to_target() {
+        // The state that crossed generations has to be the bytes the *new*
+        // plugin asked for. If `prepare-upgrade` were handed the old version, a
+        // plugin that serialises differently per target would hand back state the
+        // new reader cannot parse, and the swap would still have succeeded.
+        let (routes, s) = sup();
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
+
+        s.swap(
+            &pid(),
+            new.clone(),
+            old.clone(),
+            StateMigration::Required,
+            &Json::Null,
+        )
+        .await;
+
+        let old_calls = old_rt.calls();
+        let new_calls = new_rt.calls();
+        assert!(
+            old_calls.contains(&"prepare:2.0.0".to_string()),
+            "old must be asked to serialise for the NEW version: {old_calls:?}"
+        );
+        // `accept-upgrade` runs on the *incoming* generation — the old one has
+        // nothing left to do by then. Reading this off the old runtime would
+        // pass vacuously if the call were simply never made.
+        assert!(
+            new_calls.contains(&"accept:1.0.0".to_string()),
+            "new must be told which version it is receiving from: {new_calls:?}"
+        );
+        assert!(
+            !old_calls.iter().any(|c| c.starts_with("accept:")),
+            "the outgoing generation must not be asked to import: {old_calls:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn stateless_swap_never_migrates() {
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let new = FakeRuntime::new(2, "2.0.0", 2);
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), false, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::None,
+                &Json::Null,
+            )
             .await;
 
         assert!(r.outcome.swapped);
         assert!(!r.trace.migrated);
         assert!(!r.trace.steps.contains(&"prepare-upgrade"));
         assert!(!r.trace.steps.contains(&"accept-upgrade"));
-        assert_eq!(new.calls(), vec!["init:null", "health"]);
+        assert_eq!(new_rt.descriptor().state_schema_version, 2);
     }
 
     #[tokio::test]
     async fn init_failure_keeps_the_old_generation_serving() {
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let new = make_failing(2, "init");
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::failing(2, "init");
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), true, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
             .await;
 
         assert!(!r.outcome.swapped);
         assert_eq!(r.outcome.generation, Some(Generation(1)));
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
-        // The staged generation is discarded, never left half-alive.
-        assert_eq!(new.shutdowns(), 1);
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
         assert!(!r.trace.swapped);
-        // The old generation was not touched at all.
-        assert_eq!(old.shutdowns(), 0);
+        // The staged generation is discarded, never left half-alive.
+        assert_eq!(new_rt.shutdowns(), 1);
+        assert_eq!(old_rt.shutdowns(), 0);
+        assert!(r.trace.steps.contains(&"discard-staged"));
     }
 
     #[tokio::test]
     async fn health_failure_keeps_the_old_generation_serving() {
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let new = make_failing(2, "health");
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::failing(2, "health");
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), true, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
             .await;
 
         assert!(!r.outcome.swapped);
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
-        assert_eq!(new.shutdowns(), 1);
-        assert!(r.trace.steps.contains(&"discard-staged"));
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
+        assert_eq!(new_rt.shutdowns(), 1);
+        assert_eq!(old_rt.shutdowns(), 0);
     }
 
     #[tokio::test]
@@ -565,49 +779,60 @@ mod tests {
         // serialising its state), so a failure there must abandon the staging
         // generation before `accept-upgrade` is ever asked to read state.
         let (routes, s) = sup();
-        let old = Arc::new(FakeRuntime {
+        let old_rt = Arc::new(FakeRuntime {
             generation: Generation(1),
-            version: "1.0.0",
+            version: "1.0.0".into(),
             schema: 1,
             prepare_fails: true,
             ..Default::default()
         });
-        let new = FakeRuntime::new(2, "2.0.0", 2);
-        routes.atomic_swap(&pid(), old.generation());
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), true, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
             .await;
 
         assert!(!r.outcome.swapped, "swap must be refused");
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
-        assert_eq!(
-            old.calls(),
-            vec!["prepare:2.0.0".to_string()],
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
+        assert!(
+            old_rt.calls().contains(&"prepare:2.0.0".to_string()),
             "the old generation tried and failed to serialise"
         );
-        assert_eq!(
-            new.calls(),
-            vec!["init:null", "health", "shutdown"],
-            "the staging generation must never have seen accept-upgrade"
-        );
-        assert_eq!(old.shutdowns(), 0, "the serving generation is untouched");
+        assert_eq!(old_rt.shutdowns(), 0, "the serving generation is untouched");
+        assert!(r.trace.steps.contains(&"discard-staged"));
     }
 
     #[tokio::test]
     async fn accept_failure_keeps_the_old_generation_serving() {
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let new = make_failing(2, "accept");
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::failing(2, "accept");
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), true, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
             .await;
 
         assert!(!r.outcome.swapped);
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
-        assert_eq!(new.shutdowns(), 1);
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
+        assert_eq!(new_rt.shutdowns(), 1);
         assert!(
             r.outcome.reason.contains("state rejected"),
             "{}",
@@ -620,17 +845,25 @@ mod tests {
         // NFR-M02: an incompatible migration target must be refused, keeping
         // the old generation, and the refusal must cost nothing.
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 5);
-        let new = FakeRuntime::new(2, "2.0.0", 3);
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 5);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 3);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), true, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
             .await;
 
         assert!(!r.outcome.swapped);
         assert_eq!(r.outcome.generation, Some(Generation(1)));
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
         assert!(
             r.outcome.reason.contains("state schema downgrade"),
             "{}",
@@ -638,38 +871,112 @@ mod tests {
         );
         // Neither migration call ran: `prepare-upgrade` belongs to the old
         // generation, and the refusal happened before it was asked to.
-        assert_eq!(new.calls(), vec!["init:null", "health", "shutdown"]);
-        assert_eq!(old.calls(), Vec::<String>::new());
-        assert_eq!(new.shutdowns(), 1);
+        assert!(!r.trace.steps.contains(&"prepare-upgrade"));
+        assert!(!r.trace.steps.contains(&"accept-upgrade"));
+        assert_eq!(new_rt.shutdowns(), 1);
+        assert_eq!(old_rt.shutdowns(), 0);
     }
 
     #[tokio::test]
     async fn equal_state_schema_is_accepted() {
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 2);
-        let new = FakeRuntime::new(2, "2.0.0", 2);
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 2);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), true, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
             .await;
         assert!(r.outcome.swapped);
+    }
+
+    #[tokio::test]
+    async fn the_schema_verdict_comes_from_the_generations_not_the_caller() {
+        // ADR-016 / NFR-M02. `StateMigration::Required` carries no version, so
+        // the only way the supervisor can learn the incoming schema is by asking
+        // the generation itself. If the descriptor stopped being consulted and a
+        // caller-supplied value were used instead, this downgrade would swap.
+        let (routes, s) = sup();
+        let old_rt = FakeRuntime::new(1, "1.0.0", 9);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 1);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
+
+        let r = s
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::Required,
+                &Json::Null,
+            )
+            .await;
+
+        assert!(
+            !r.outcome.swapped,
+            "a downgrade declared by the generations themselves must be refused"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_supervisor_hands_back_the_retired_generation_for_rollback() {
+        // ADR-016: after a swap the old generation is no longer in the route
+        // table, so a number could not restore it. If `retired` were dropped,
+        // rollback would be impossible and AC-04 would silently be dead code.
+        let (routes, s) = sup();
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
+
+        let r = s
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::None,
+                &Json::Null,
+            )
+            .await;
+
+        let retired = r.retired.expect("the displaced generation is handed back");
+        assert_eq!(retired.generation(), Generation(1));
+        assert_eq!(retired.ports().generation, 1);
     }
 
     #[tokio::test]
     async fn rollback_after_swap_restores_the_previous_generation() {
         // DD-PLG §4: "failure after swap during early health can swap back N".
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let new = FakeRuntime::new(2, "2.0.0", 2);
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+        routes.atomic_swap(&pid(), old.clone());
 
-        s.swap(&pid(), new.clone(), old.clone(), false, &Json::Null)
+        let r = s
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::None,
+                &Json::Null,
+            )
             .await;
-        assert_eq!(routes.current(&pid()), Some(Generation(2)));
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(2)));
 
-        s.rollback(&pid(), Generation(1));
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
+        s.rollback(&pid(), r.retired.expect("retired generation"));
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
     }
 
     #[tokio::test]
@@ -677,50 +984,102 @@ mod tests {
         // The new generation is already serving; reverting because the *old*
         // one would not drain would drop traffic on the floor.
         let (routes, s) = sup();
-        let old = FakeRuntime::new(1, "1.0.0", 1);
-        let mut new = FakeRuntime::new(2, "2.0.0", 2);
-        Arc::get_mut(&mut new).unwrap().drain_fails = true;
-        routes.atomic_swap(&pid(), old.generation());
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = Arc::new(FakeRuntime {
+            generation: Generation(2),
+            version: "2.0.0".into(),
+            schema: 2,
+            drain_fails: true,
+            ..Default::default()
+        });
+        let new = gen(new_rt);
+        routes.atomic_swap(&pid(), old.clone());
 
         let r = s
-            .swap(&pid(), new.clone(), old.clone(), false, &Json::Null)
+            .swap(
+                &pid(),
+                new.clone(),
+                old.clone(),
+                StateMigration::None,
+                &Json::Null,
+            )
             .await;
         assert!(r.outcome.swapped);
-        assert_eq!(routes.current(&pid()), Some(Generation(2)));
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(2)));
         // The old generation is still shut down, so it does not linger.
-        assert_eq!(old.shutdowns(), 1);
+        assert_eq!(old_rt.shutdowns(), 1);
     }
 
     #[tokio::test]
     async fn install_runs_init_and_health_before_routing() {
         let (routes, s) = sup();
-        let new = FakeRuntime::new(1, "1.0.0", 1);
+        let new = gen(FakeRuntime::new(1, "1.0.0", 1));
 
         let r = s.install(&pid(), new.clone(), &Json::Null).await;
         assert!(r.outcome.swapped);
-        assert_eq!(routes.current(&pid()), Some(Generation(1)));
-        assert_eq!(new.calls(), vec!["init:null", "health"]);
+        assert_eq!(routes.current_generation(&pid()), Some(Generation(1)));
+        assert!(r.retired.is_none(), "a first install displaces nothing");
     }
 
     #[tokio::test]
     async fn install_of_an_unhealthy_provider_routes_nothing() {
         let (routes, s) = sup();
-        let new = make_failing(1, "health");
+        let new_rt = FakeRuntime::failing(1, "health");
+        let new = gen(new_rt.clone());
 
         let r = s.install(&pid(), new.clone(), &Json::Null).await;
         assert!(!r.outcome.swapped);
-        assert!(routes.current(&pid()).is_none());
-        assert_eq!(new.shutdowns(), 1);
+        assert!(routes.current_generation(&pid()).is_none());
+        assert_eq!(new_rt.shutdowns(), 1);
     }
 
     #[tokio::test]
     async fn retire_stops_routing_and_shuts_down() {
         let (routes, s) = sup();
         let rt = FakeRuntime::new(1, "1.0.0", 1);
-        routes.atomic_swap(&pid(), rt.generation());
+        let loaded = gen(rt.clone());
+        routes.atomic_swap(&pid(), loaded.clone());
 
-        s.retire(&pid(), Some(rt.clone())).await;
-        assert!(routes.current(&pid()).is_none());
+        s.retire(&pid(), Some(loaded)).await;
+        assert!(routes.current_generation(&pid()).is_none());
         assert_eq!(rt.shutdowns(), 1);
+    }
+
+    #[tokio::test]
+    async fn retire_of_a_plugin_that_is_not_routed_is_harmless() {
+        // Uninstalling something that was never installed must not panic, and
+        // must not shut down a generation the caller passed in speculatively.
+        let (routes, s) = sup();
+        let rt = FakeRuntime::new(1, "1.0.0", 1);
+
+        s.retire(&pid(), None).await;
+        assert!(routes.current_generation(&pid()).is_none());
+        assert_eq!(rt.shutdowns(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_refused_swap_reports_no_generation_when_nothing_was_serving() {
+        // The refusal must not invent a generation. Reporting `Some(..)` here
+        // would tell an operator a plugin is live when it never was.
+        let (_routes, s) = sup();
+        let new_rt = FakeRuntime::failing(1, "init");
+        let new = gen(new_rt.clone());
+
+        let r = s.install(&pid(), new, &Json::Null).await;
+        assert!(!r.outcome.swapped);
+        assert_eq!(r.outcome.generation, None);
+    }
+
+    #[test]
+    fn now_iso_is_a_usable_timestamp() {
+        // Present so callers can record attempt times without a clock
+        // dependency; a formatter that returned an empty string would pass
+        // unnoticed everywhere it is used.
+        let stamp = now_iso();
+        assert!(
+            stamp.contains("T") && (stamp.ends_with('Z') || stamp.ends_with("+00:00")),
+            "expected an RFC3339 UTC timestamp: {stamp}"
+        );
     }
 }

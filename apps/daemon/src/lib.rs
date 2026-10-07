@@ -13,6 +13,7 @@
 
 pub mod events;
 pub mod methods;
+pub mod plugins;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -106,7 +107,16 @@ impl Daemon {
         let pipe = cfg
             .pipe_path
             .unwrap_or_else(sandtree_ipc::transport::pipe_path);
-        let router = Arc::new(methods::build_router(kernel.clone()));
+        // Plugin lifecycle state (ADR-016). The daemon ships a loader that
+        // refuses, because it does not host a WASM engine: components run in
+        // worker processes (FR-055). The endpoints exist and answer precisely;
+        // wiring a real worker transport is what turns them from a refusal into
+        // an install.
+        let plugin_control = plugins::PluginControl::unavailable(
+            Arc::new(sandtree_plugin_host::route::RouteTable::new()),
+            "this daemon build has no plugin worker transport",
+        );
+        let router = Arc::new(methods::build_router(kernel.clone(), plugin_control));
         let events = kernel.event_router().clone();
 
         // A first discovery pass runs before the daemon accepts traffic, so the

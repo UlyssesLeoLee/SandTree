@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 sandtree-daemon.workspace = true
+sandtree-plugin-host.workspace = true
 sandtree-ipc.workspace = true
 sandtree-kernel.workspace = true
 sandtree-model.workspace = true

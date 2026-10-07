@@ -261,6 +261,25 @@ dist/SandTree-1.1.0-x64.msi     2.41 MB   安装程序，免提权
 | 真实 `.wasm` 组件产物 | 本机无 rustup shim，无法安装 `wasm32-wasip2` target 交叉编译 | `plugin-host` 的 component 加载路径由 WAT fixture 覆盖；ABI 由 `wit/` 与 `schemas/*.wit` 冻结 |
 | `Docker Sandboxes` 实验 API 真实联调 | 该 API 为 experimental | provider 以 capability probe + CLI 降级 + fixture 兜底实现（DD-PLG §8 明文要求的三级降级） |
 | `cargo deny check advisories` | 无 cargo-deny 二进制 | license/source 两项已由离线门禁覆盖；advisory（RustSec）一项未覆盖 |
+| plugin worker 传输（IPC/进程通道） | daemon 不宿主 WASM engine，组件必须跑在 worker 进程里（FR-055）。`PluginLoader` 是为此留的接缝，本仓只提供 `UnavailableLoader` | `plugin.install` / `plugin.hotswap` 端点已真实注册并派发，但当前**恒定拒绝**并给出可读原因。接上 loader 即变成可用安装，不需要改端点 |
+
+## 7.1 插件生命周期：机制已通，staging 待接（ADR-016）
+
+`plugin.install` / `plugin.hotswap` / `plugin.rollback` / `plugin.disable` 四个方法此前在
+`not_served` 名单里，而 `apps/daemon/Cargo.toml` 根本没依赖 `sandtree-plugin-host`——即
+supervisor 是完整且被测试的，却**在产品上不可达**。本轮：
+
+- `RouteTable` 改为存 `Arc<LoadedGeneration>` 而非 generation 数字。「原子 swap」此前只完成
+  了换指针那一半，路由可能指向 host 拿不到的实例；现在 swap 是一次写，同时完成两件事。
+- `LoadedGeneration` 把 lifecycle 与 ports 绑成一个值，`plugin_id` / `generation` 由 host
+  覆写，调用方无法谎报。kernel 的 `ProviderRegistry` 降级为投影。
+- `ClusterInstaller` 用 `RouteTable::atomic_publish`（单锁一次写）实现 App Cluster 的整组生效；
+  `required: false` 的集群按 manifest 语义丢弃并报告原因。
+- daemon 侧 `PluginControl` 持有路由表 + supervisor + 回滚保留位；swap 被拒时**保留位不变**，
+  失败升级不会毁掉回滚路径。
+
+变异验证：`the_plugin_lifecycle_endpoints_are_reachable_not_merely_declared` 在把 `plugin.hotswap`
+改回 `not_served` 后立即变红（已实测，非推断）。
 
 ## 8. 追溯
 

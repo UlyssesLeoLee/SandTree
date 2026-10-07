@@ -692,7 +692,13 @@ async fn uat_019_cli_and_daemon_expose_the_same_method_set() {
             .await
             .expect("bootstrap"),
     );
-    let router = sandtree_daemon::methods::build_router(kernel);
+    let router = sandtree_daemon::methods::build_router(
+        kernel,
+        sandtree_daemon::plugins::PluginControl::unavailable(
+            std::sync::Arc::new(sandtree_plugin_host::route::RouteTable::new()),
+            "uat local router has no plugin worker transport",
+        ),
+    );
 
     let routed: BTreeSet<&str> = router.methods().into_iter().collect();
     assert!(

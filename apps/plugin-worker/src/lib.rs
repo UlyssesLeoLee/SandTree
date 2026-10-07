@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use sandtree_model::capability::CapabilitySet;
 use sandtree_model::error::{DomainError, ErrorCode};
+use sandtree_plugin_host::generation::LoadedGeneration;
 use sandtree_plugin_host::hot_swap::GenerationRuntime;
 use sandtree_plugin_host::limits::WorkerLimits;
 use sandtree_plugin_host::route::Generation;
@@ -72,7 +73,13 @@ pub enum WorkerState {
 pub struct Worker {
     spec: WorkerSpec,
     state: WorkerState,
-    runtime: Option<Arc<dyn GenerationRuntime>>,
+    /// The loaded generation, once [`Worker::load`] has succeeded.
+    ///
+    /// Held as a whole generation rather than a bare runtime so the value handed
+    /// to the plugin host already carries its plugin id and generation number
+    /// (ADR-016) — there is no point at which a caller could receive a
+    /// lifecycle object and have to guess which plugin it belongs to.
+    loaded: Option<Arc<LoadedGeneration>>,
     policy: InstallPolicy,
 }
 
@@ -81,7 +88,7 @@ impl std::fmt::Debug for Worker {
         f.debug_struct("Worker")
             .field("state", &self.state)
             .field("generation", &self.spec.generation)
-            .field("loaded", &self.runtime.is_some())
+            .field("loaded", &self.loaded.is_some())
             .finish()
     }
 }
@@ -92,7 +99,7 @@ impl Worker {
         Self {
             spec,
             state: WorkerState::Idle,
-            runtime: None,
+            loaded: None,
             policy: InstallPolicy::deny_all(),
         }
     }
@@ -132,9 +139,14 @@ impl Worker {
 
     /// Load the component and mark the worker ready.
     ///
+    /// Returns the loaded generation, ready to hand to
+    /// [`sandtree_plugin_host::HotSwapSupervisor`]. The caller decides whether it
+    /// becomes live; loading is not publishing (DD-PLG §4: everything expensive
+    /// happens before the route write).
+    ///
     /// Only compiled when the host was built with the `wasmtime-abi` feature;
     /// otherwise this returns a typed error instead of pretending to load.
-    pub async fn load(&mut self) -> Result<(), DomainError> {
+    pub async fn load(&mut self) -> Result<Arc<LoadedGeneration>, DomainError> {
         let staged = self.verify()?;
         // The grant the worker actually runs with is the daemon's grant narrowed
         // by what the package was allowed to ask for.
@@ -162,10 +174,17 @@ impl Worker {
             // worker's process lifetime deliberately: a generation is dropped
             // only at retirement, and the worker process is the boundary.
             std::mem::forget(engine);
-            let runtime = runtime?;
-            self.runtime = Some(runtime);
+            // The grant is already baked into the generation's host state, so
+            // the routable bundle carries lifecycle only. A component exposes
+            // ports once the WIT adapter can hand them over.
+            let generation = LoadedGeneration::lifecycle_only(
+                staged.plugin_id.clone(),
+                self.spec.generation,
+                runtime?,
+            );
+            self.loaded = Some(generation.clone());
             self.state = WorkerState::Ready;
-            Ok(())
+            Ok(generation)
         }
         #[cfg(not(feature = "wasmtime-abi"))]
         {
@@ -180,24 +199,29 @@ impl Worker {
 
     /// Run `init` and mark the worker initialised.
     pub async fn initialise(&mut self, config: &Json) -> Result<(), DomainError> {
-        let runtime = self.runtime.as_ref().ok_or_else(|| {
+        let loaded = self.loaded.as_ref().ok_or_else(|| {
             DomainError::new(ErrorCode::PLUGIN_HEALTH_FAILED, "worker is not loaded")
         })?;
-        runtime.init(config).await?;
+        loaded.runtime().init(config).await?;
         self.state = WorkerState::Initialised;
         Ok(())
     }
 
-    /// The loaded runtime, if any.
+    /// The loaded generation, if any.
+    pub fn loaded(&self) -> Option<&Arc<LoadedGeneration>> {
+        self.loaded.as_ref()
+    }
+
+    /// The lifecycle object behind the loaded generation.
     pub fn runtime(&self) -> Option<&Arc<dyn GenerationRuntime>> {
-        self.runtime.as_ref()
+        self.loaded.as_ref().map(|g| g.runtime())
     }
 
     /// Drain and shut the generation down, then forget it.
     pub async fn retire(&mut self) {
-        if let Some(rt) = self.runtime.take() {
-            let _ = rt.drain(self.spec.limits.wall_clock_ms).await;
-            rt.shutdown().await;
+        if let Some(loaded) = self.loaded.take() {
+            let _ = loaded.runtime().drain(self.spec.limits.wall_clock_ms).await;
+            loaded.runtime().shutdown().await;
         }
         self.state = WorkerState::Retired;
     }

@@ -18,11 +18,16 @@ use sandtree_ipc::Request;
 use sandtree_kernel::resources::ResourceFilter;
 use sandtree_kernel::Kernel;
 use sandtree_model::error::{DomainError, ErrorCode};
-use sandtree_model::id::ResourceId;
+use sandtree_model::id::{PluginId, ResourceId};
 use sandtree_model::operation::{OperationKind, OperationRequest};
 use sandtree_model::resource::Correlation;
 use sandtree_observation_model::{ObservationDomain, ObservationRequest};
+use sandtree_plugin_host::hot_swap::SwapResult;
+use sandtree_plugin_host::route::HotSwapOutcome;
+use serde_json::json;
 use serde_json::Value as Json;
+
+use crate::plugins::PluginControl;
 
 /// Schema version reported by `diagnostic.version`.
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -85,8 +90,61 @@ fn to_json<T: serde::Serialize>(v: &T) -> Result<Json, DomainError> {
     serde_json::to_value(v).map_err(|e| bad_request(format!("cannot serialise result: {e}")))
 }
 
+/// Resolve a manifest plugin id (a reverse-domain-like name) to a `PluginId`.
+///
+/// Plugin ids in manifests are readable names (`sandtree.provider.docker`), not
+/// the opaque `plg-…` form the wire uses elsewhere. Deriving them the same way
+/// every other manifest name is derived keeps one rule across the codebase.
+fn need_plugin(raw: &str) -> Result<PluginId, DomainError> {
+    sandtree_sdk::manifest::validate_plugin_id(raw)
+        .map_err(|e| bad_request(format!("plugin_id {raw:?}: {e}")))?;
+    Ok(PluginId::derive(&[raw]))
+}
+
+/// A `HotSwapOutcome` as a wire object.
+fn outcome_json(outcome: &HotSwapOutcome) -> serde_json::Map<String, Json> {
+    let mut map = serde_json::Map::new();
+    map.insert("swapped".into(), Json::Bool(outcome.swapped));
+    map.insert(
+        "generation".into(),
+        outcome
+            .generation
+            .map(|g| Json::from(g.0))
+            .unwrap_or(Json::Null),
+    );
+    map.insert("reason".into(), Json::String(outcome.reason.clone()));
+    map
+}
+
+/// A `SwapResult` as a wire object.
+///
+/// The step list is included because it is the only record of *how far* a
+/// refused swap got; without it an operator sees a message and has to guess
+/// whether migration ran.
+fn swap_to_json(result: &SwapResult) -> Json {
+    let mut map = outcome_json(&result.outcome);
+    map.insert(
+        "steps".into(),
+        Json::Array(result.trace.steps.iter().map(|s| Json::from(*s)).collect()),
+    );
+    map.insert("migrated".into(), Json::Bool(result.trace.migrated));
+    map.insert(
+        "correlation_id".into(),
+        Json::String(result.correlation_id.clone()),
+    );
+    map.insert(
+        "retired".into(),
+        result
+            .retired
+            .as_ref()
+            .map(|g| Json::from(g.generation().0))
+            .unwrap_or(Json::Null),
+    );
+    Json::Object(map)
+}
+
 /// Build the full method router.
-pub fn build_router(kernel: Arc<Kernel>) -> MethodRouter {
+pub fn build_router(kernel: Arc<Kernel>, plugin_control: PluginControl) -> MethodRouter {
     let mut r = MethodRouter::new();
 
     // --- resource (read-only) ---
@@ -364,6 +422,80 @@ pub fn build_router(kernel: Arc<Kernel>) -> MethodRouter {
         });
     }
 
+    // --- plugin lifecycle ---
+    //
+    // These four answer for real. They used to sit in the `not_served` list
+    // below, which meant the supervisor existed, was tested, and was unreachable
+    // (ADR-016). Staging itself is delegated to a `PluginLoader`; the daemon
+    // ships a loader that refuses, so an install without a worker transport
+    // returns a typed refusal rather than a route to nothing.
+    {
+        let c = Arc::new(plugin_control);
+        let c_install = Arc::clone(&c);
+        r.register_owned(method::PLUGIN_INSTALL, move |req| {
+            let c = Arc::clone(&c_install);
+            async move {
+                let raw = need_str(&req.params, "plugin_id")?;
+                let plugin = need_plugin(&raw)?;
+                let config = req
+                    .params
+                    .get("config")
+                    .cloned()
+                    .unwrap_or(Json::Object(Default::default()));
+                let result = c.install(&plugin, &config).await?;
+                ok_json(swap_to_json(&result))
+            }
+        });
+
+        let c_swap = Arc::clone(&c);
+        r.register_owned(method::PLUGIN_HOTSWAP, move |req| {
+            let c = Arc::clone(&c_swap);
+            async move {
+                let raw = need_str(&req.params, "plugin_id")?;
+                let plugin = need_plugin(&raw)?;
+                let stateful = req
+                    .params
+                    .get("stateful")
+                    .and_then(Json::as_bool)
+                    .unwrap_or(false);
+                let config = req
+                    .params
+                    .get("config")
+                    .cloned()
+                    .unwrap_or(Json::Object(Default::default()));
+                let result = c.hotswap(&plugin, stateful, &config).await?;
+                ok_json(swap_to_json(&result))
+            }
+        });
+
+        let c_rollback = Arc::clone(&c);
+        r.register_owned(method::PLUGIN_ROLLBACK, move |req| {
+            let c = Arc::clone(&c_rollback);
+            async move {
+                let raw = need_str(&req.params, "plugin_id")?;
+                let plugin = need_plugin(&raw)?;
+                let outcome = c.rollback(&plugin).await;
+                ok_json(Json::Object(outcome_json(&outcome)))
+            }
+        });
+
+        let c_disable = Arc::clone(&c);
+        r.register_owned(method::PLUGIN_DISABLE, move |req| {
+            let c = Arc::clone(&c_disable);
+            async move {
+                let raw = need_str(&req.params, "plugin_id")?;
+                let plugin = need_plugin(&raw)?;
+                let disabled = c.disable(&plugin).await;
+                ok_json(json!(
+                    {
+                        "plugin_id": plugin.as_str(),
+                        "disabled": disabled,
+                    }
+                ))
+            }
+        });
+    }
+
     // --- methods this build recognises but does not serve ---
     //
     // Registered explicitly so that a client gets a precise, typed answer
@@ -378,11 +510,7 @@ pub fn build_router(kernel: Arc<Kernel>) -> MethodRouter {
         method::SNAPSHOT_CREATE,
         method::SNAPSHOT_RESTORE,
         method::SNAPSHOT_DIFF,
-        method::PLUGIN_INSTALL,
         method::PLUGIN_ENABLE,
-        method::PLUGIN_DISABLE,
-        method::PLUGIN_HOTSWAP,
-        method::PLUGIN_ROLLBACK,
     ] {
         let name = m;
         r.register_owned(name, move |_req| async move { Err(not_served(name)) });
@@ -466,13 +594,17 @@ mod tests {
     use crate::{Daemon, DaemonConfig};
     use sandtree_kernel::KernelConfig;
     use sandtree_model::resource::ResourceKind;
+    use sandtree_plugin_host::route::RouteTable;
 
     async fn router() -> (tempfile::TempDir, MethodRouter) {
         let dir = tempfile::tempdir().unwrap();
         let k = Kernel::bootstrap(KernelConfig::new(dir.path()))
             .await
             .unwrap();
-        let r = build_router(Arc::new(k));
+        let r = build_router(
+            Arc::new(k),
+            crate::plugins::PluginControl::unavailable(Arc::new(RouteTable::new()), "test"),
+        );
         (dir, r)
     }
 
@@ -481,6 +613,65 @@ mod tests {
         let (_d, r) = router().await;
         for m in method::ALL {
             assert!(r.contains(m), "{m} has no handler");
+        }
+    }
+
+    #[tokio::test]
+    async fn the_plugin_lifecycle_endpoints_are_reachable_not_merely_declared() {
+        // The plugin lifecycle endpoints used to answer `not_served`. A handler
+        // existing proves the method is routable; *calling* it proves the control
+        // plane is reached. Only the second makes the mechanism reachable —
+        // which is exactly what ADR-016 set out to fix.
+        let (_d, r) = router().await;
+
+        for (m, params) in [
+            (
+                method::PLUGIN_INSTALL,
+                serde_json::json!({"plugin_id": "sandtree.provider.x"}),
+            ),
+            (
+                method::PLUGIN_HOTSWAP,
+                serde_json::json!({"plugin_id": "sandtree.provider.x"}),
+            ),
+            (
+                method::PLUGIN_ROLLBACK,
+                serde_json::json!({"plugin_id": "sandtree.provider.x"}),
+            ),
+            (
+                method::PLUGIN_DISABLE,
+                serde_json::json!({"plugin_id": "sandtree.provider.x"}),
+            ),
+        ] {
+            let json = r.dispatch(&request(m, params)).await.to_json();
+            let message = json["error"]["message"].as_str().unwrap_or_default();
+            assert!(
+                !message.contains("not served by this build"),
+                "{m} is still a not_served stub: {message}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_malformed_plugin_id_is_rejected_before_it_reaches_the_host() {
+        // Validated against the same rule the manifest schema uses. A private
+        // copy of that rule in the daemon would be free to drift from the schema
+        // pattern, which is why `validate_plugin_id` is public.
+        let (_d, r) = router().await;
+        for bad in ["NOT-DOTTED", "sandtree.provider.x/", ""] {
+            let json = r
+                .dispatch(&request(
+                    method::PLUGIN_INSTALL,
+                    serde_json::json!({ "plugin_id": bad }),
+                ))
+                .await
+                .to_json();
+            assert!(
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("plugin_id"),
+                "{bad:?} should be rejected as a client error, got {json}"
+            );
         }
     }
 

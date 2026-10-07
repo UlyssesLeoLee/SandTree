@@ -556,7 +556,11 @@ fn reject_unknown_keys(
 
 /// `plugin_id` must be lower-case reverse-domain, matching schema pattern
 /// `^[a-z0-9.-]+$`, and must be dotted.
-fn validate_plugin_id(id: &str) -> Result<(), DomainError> {
+///
+/// Public because the same rule applies to ids arriving over IPC, not just to
+/// manifests on disk. A private copy of this check in the daemon would be free
+/// to drift from the schema pattern.
+pub fn validate_plugin_id(id: &str) -> Result<(), DomainError> {
     if id.is_empty() {
         return Err(invalid("manifest: plugin_id must not be empty"));
     }

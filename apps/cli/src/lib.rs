@@ -251,8 +251,19 @@ pub fn to_request(cmd: &Command) -> Option<Request> {
 ///
 /// Read-only commands work against it; a mutation fails with a precise error
 /// rather than running without a daemon to audit it.
+///
+/// The plugin lifecycle state here uses the same refusing loader the daemon
+/// ships (ADR-016): the CLI has no worker transport either, and inventing a
+/// second answer for the same endpoint would make "why did install fail"
+/// depend on which process answered.
 pub fn local_router(kernel: std::sync::Arc<sandtree_kernel::Kernel>) -> MethodRouter {
-    sandtree_daemon::methods::build_router(kernel)
+    sandtree_daemon::methods::build_router(
+        kernel,
+        sandtree_daemon::plugins::PluginControl::unavailable(
+            std::sync::Arc::new(sandtree_plugin_host::route::RouteTable::new()),
+            "the local CLI router has no plugin worker transport",
+        ),
+    )
 }
 
 #[cfg(test)]

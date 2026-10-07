@@ -722,7 +722,12 @@ mod ipc_surface {
     }
 
     /// An unimplemented method fails loudly instead of pretending to work.
-    #[tokio::test]
+///
+/// Uses `snapshot.create`, not `plugin.hotswap`. The plugin lifecycle methods
+/// left the `not_served` list in ADR-016; pointing this test at one of them
+/// would have kept passing for the wrong reason until it started failing for
+/// the right one.
+#[tokio::test]
     async fn an_unimplemented_method_says_so_explicitly() {
         let dir = tempfile::tempdir().unwrap();
         let d = Daemon::start(DaemonConfig {
@@ -736,7 +741,7 @@ mod ipc_surface {
         let resp = d
             .router()
             .dispatch(&sandtree_ipc::Request::new(
-                method::PLUGIN_HOTSWAP,
+                method::SNAPSHOT_CREATE,
                 Json::Null,
             ))
             .await;
@@ -746,7 +751,7 @@ mod ipc_surface {
             .unwrap()
             .to_string();
         assert!(msg.contains("not served"), "{msg}");
-        assert!(msg.contains(method::PLUGIN_HOTSWAP), "{msg}");
+        assert!(msg.contains(method::SNAPSHOT_CREATE), "{msg}");
     }
 
     /// Malformed parameters are client errors, not server errors.
@@ -781,7 +786,8 @@ fn k_err_code(json: &Json) -> ErrorCode {
 #[cfg(test)]
 mod hot_swap_flow {
     use super::*;
-    use sandtree_plugin_host::hot_swap::{GenerationRuntime, HotSwapSupervisor};
+    use sandtree_plugin_host::generation::LoadedGeneration;
+    use sandtree_plugin_host::hot_swap::{GenerationRuntime, HotSwapSupervisor, StateMigration};
     use sandtree_plugin_host::limits::WorkerLimits;
     use sandtree_plugin_host::route::{Generation, RouteTable};
     use sandtree_sdk::wit::WitDescriptor;
@@ -827,30 +833,41 @@ mod hot_swap_flow {
         async fn shutdown(&self) {}
     }
 
+    /// Build a routable generation for `plugin` (ADR-016).
+    fn loaded(
+        plugin: &PluginId,
+        generation: u64,
+        version: &'static str,
+        schema: u32,
+        init_ok: bool,
+    ) -> Arc<LoadedGeneration> {
+        Arc::new(LoadedGeneration::lifecycle_only(
+            plugin.clone(),
+            Generation(generation),
+            Arc::new(Stub {
+                generation: Generation(generation),
+                version,
+                schema,
+                init_ok,
+            }),
+        ))
+    }
+
     /// FR-052: a failing new generation must leave the old one serving.
     #[tokio::test]
     async fn a_failed_upgrade_never_takes_the_route_down() {
         let routes = Arc::new(RouteTable::new());
         let sup = HotSwapSupervisor::new(routes.clone(), WorkerLimits::host_ceiling());
         let plugin = PluginId::derive(&["p"]);
-        routes.atomic_swap(&plugin, Generation(1));
+        let old = loaded(&plugin, 1, "1.0.0", 1, true);
+        routes.atomic_swap(&plugin, old.clone());
+        let new = loaded(&plugin, 2, "2.0.0", 1, false);
 
-        let old: Arc<dyn GenerationRuntime> = Arc::new(Stub {
-            generation: Generation(1),
-            version: "1.0.0",
-            schema: 1,
-            init_ok: true,
-        });
-        let new: Arc<dyn GenerationRuntime> = Arc::new(Stub {
-            generation: Generation(2),
-            version: "2.0.0",
-            schema: 1,
-            init_ok: false,
-        });
-
-        let r = sup.swap(&plugin, new, old, true, &Json::Null).await;
+        let r = sup
+            .swap(&plugin, new, old, StateMigration::Required, &Json::Null)
+            .await;
         assert!(!r.outcome.swapped);
-        assert_eq!(routes.current(&plugin), Some(Generation(1)));
+        assert_eq!(routes.current_generation(&plugin), Some(Generation(1)));
     }
 
     /// NFR-M02: a state-schema downgrade is refused before migrating.
@@ -859,28 +876,19 @@ mod hot_swap_flow {
         let routes = Arc::new(RouteTable::new());
         let sup = HotSwapSupervisor::new(routes.clone(), WorkerLimits::host_ceiling());
         let plugin = PluginId::derive(&["p"]);
-        routes.atomic_swap(&plugin, Generation(1));
+        let old = loaded(&plugin, 1, "1.0.0", 4, true);
+        routes.atomic_swap(&plugin, old.clone());
+        let new = loaded(&plugin, 2, "2.0.0", 2, true);
 
-        let old: Arc<dyn GenerationRuntime> = Arc::new(Stub {
-            generation: Generation(1),
-            version: "1.0.0",
-            schema: 4,
-            init_ok: true,
-        });
-        let new: Arc<dyn GenerationRuntime> = Arc::new(Stub {
-            generation: Generation(2),
-            version: "2.0.0",
-            schema: 2,
-            init_ok: true,
-        });
-
-        let r = sup.swap(&plugin, new, old, true, &Json::Null).await;
+        let r = sup
+            .swap(&plugin, new, old, StateMigration::Required, &Json::Null)
+            .await;
         assert!(!r.outcome.swapped);
         assert!(
             r.outcome.reason.contains("downgrade"),
             "{}",
             r.outcome.reason
         );
-        assert_eq!(routes.current(&plugin), Some(Generation(1)));
+        assert_eq!(routes.current_generation(&plugin), Some(Generation(1)));
     }
 }

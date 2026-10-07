@@ -341,3 +341,82 @@ MCP 端的服务器是一个真实的 MCP 实现——按 `id` 关联、赋予 s
 变异【删掉 verdict 的域绑定】-> `a_verdict_judged_for_another_domain_is_not_accepted` 变红。
 
 **当前测试规模**：`acquire` 48 条 + git-remote 72 条（63 单测 + 9 端到端）+ mcp-remote 55 条（48 单测 + 7 端到端）= 175 条新增。
+
+---
+
+## ADR-016 generation 权威归属：RouteTable 单一权威 + LoadedGeneration 配对（架构统一）
+
+**背景**。热插拔在实现上是完整的：`crates/plugin-host/src/hot_swap.rs` 把 DD-PLG §4 图 4-1
+逐条实现并被单测钉住顺序。但整条路径**在产品上不可达**——`plugin.hotswap` / `plugin.install` /
+`plugin.rollback` 五个方法全在 `apps/daemon/src/methods.rs` 的 `not_served` 名单里，而
+`apps/daemon/Cargo.toml` **根本没有依赖 `sandtree-plugin-host`**。`PluginHost` 这个注册表全仓零
+非测试调用方。App Cluster 更彻底：`AppManifest.clusters` 能解析能校验，但没有任何代码读它去装配。
+
+在补端点之前，先审了一遍「两条 provider 链怎么统一」，发现的问题比端点缺失更根本：
+
+| 概念 | 位置 | 谁读它 |
+| --- | --- | --- |
+| `RouteTable: PluginId -> Generation` | `plugin-host/route.rs` | 只有 supervisor 和测试 |
+| `PluginHost: PluginId -> Arc<dyn GenerationRuntime>` | `plugin-host/lib.rs` | **没有人** |
+| `ProviderInstance { plugin_id, generation, ports }` | `sdk/ports.rs` | kernel 全部路由 |
+
+一个 generation 被**两个类型描述、两个 map 存放，而且没有任何东西检查它们一致**。
+
+**决定 1：`RouteTable` 存实例，不只存数字**。这是本次最实质的修复。
+原设计里「原子 swap」= 一次 `map.insert(generation)`，但那只是一半：路由指针动了，实例注册表
+没动，于是存在一个窗口——**路由指向 gen2，但 host 拿不出 gen2 的对象**。这正是 DD-PLG §4 的
+原子性要防的事，而它恰恰发生在「swap 本身」这一步。两个 map 的两次写，再怎么小心也关不掉这个窗口，
+因为它们不在同一个临界区。
+
+改为 `RouteTable: PluginId -> Arc<LoadedGeneration>`，swap 变成一次写，同时完成「换指针」和
+「交出对象」。`current()` 直接返回被路由的那个 `Arc`，调用方不再需要第二次查找——也就没有第二次
+查找可能看到另一个 generation 的可能。
+
+**决定 2：`LoadedGeneration` 把生命周期和端口绑成一个值**。
+`GenerationRuntime`（init/health/prepare/accept/drain/shutdown）与 `ProviderInstance`
+（resource/observation/files/exec）是两件事，但**同一个 generation 的两个视图**。构造时
+`plugin_id` 与 `generation` 由 host 覆写（`LoadedGeneration::new`），所以调用方无法把一个自称
+gen999 的端口包塞进来当 gen7 用。kernel 的 `ProviderRegistry` 随之降级为**投影**
+（`ports_for_registry()`），由 route table 产生，不是权威。
+
+**决定 3：`StateMigration` 是具名枚举且不携带 schema 版本**。
+原来是 `swap(..., stateful: bool, ...)`——调用点上的 `true` 不说明走的是哪条分支。改成
+`None` / `Required` 两态。更重要的是：**版本号一律从两侧 generation 的 descriptor 读**。
+中途我一度让 `Required` 带上 `state_schema_version` 让调用方传，那是倒退——调用方可以谎报
+入版本从而绕过 NFR-M02 的降级拒绝，已撤回，并由
+`the_schema_verdict_comes_from_the_generations_not_the_caller` 钉住。
+
+**决定 4：App Cluster 用一次批量发布**。
+逐个 `atomic_swap` 不是原子的：一个 app 通常是控制面 + 它控制的东西，发布到一半会留下「新控制面
+在线、旧数据面还在」的窗口——**半升级的 app 比没升级的 app 更糟，因为它看起来成功了**。
+路由表是单锁 `BTreeMap`，所以 `atomic_publish` 拿一次写锁写 N 条，整 app 同时生效。
+`required: false` 的集群按 manifest 语义丢弃并在 `skipped` 里报告原因，而不是静默。
+
+**决定 5：删掉 `PluginHost`**。它是 `RouteTable` 的重复实现，且零调用方。留着它等于给未来留一个
+「可以往这里塞东西」的第二权威。
+
+**决定 6：`discard!` 宏拆成 `StagedFailure`**。
+原宏把「关掉 staged 实例 + 返回拒绝」藏在 5 个调用点，任何新增的可失败步骤都可能新增一条泄漏路径
+而不自知。现在所有 swap 前失败汇到一处（`StagedFailure::discard`），新增步骤不可能绕过它。
+`discard-staged` 审计步保留在 trace 里。
+
+**顺带修正的两处测试陷阱**（都是重构过程中被新断言照出来的）：
+- `accept-upgrade` 调的是**入站** generation。测试原先在旧代上断言这条调用，读旧代会**空洞通过**。
+- 进程级 `static` shutdown 计数器在并行测试下互相污染。改为每个 generation 独立计数。
+
+**回归门禁**　`crates/plugin-host/src/{generation,route,hot_swap,cluster}.rs` 共 62 条，
+其中直接钉住本 ADR 的是：`the_ports_generation_is_rewritten_to_the_hosts_authority`、
+`the_routed_generation_and_its_instance_are_always_the_same_value`、
+`the_supervisor_hands_back_the_retired_generation_for_rollback`、
+`the_schema_verdict_comes_from_the_generations_not_the_caller`、
+`a_failed_required_slot_publishes_nothing`、
+`migration_reaches_the_generation_the_old_one_was_asked_to_target`。
+
+**已知缺口（未在本 ADR 范围内解决）**。
+1. `plugin.install` / `plugin.hotswap` / `plugin.rollback` 端点仍未接线——daemon 尚不依赖
+   `sandtree-plugin-host`。本 ADR 只统一了机制，未把它接到产品。
+2. `ComponentGeneration` 仍未实现 `ResourceProvider`：WIT 的 `provider-plugin` world 导出了
+   `resource-provider`，但 adapter 未实现，所以 WASM 组件目前只能 lifecycle-only 上线。
+   `LoadedGeneration::lifecycle_only` 正是为这个中间态准备的。
+3. in-process Rust provider 与 WASM 组件的**生成号分配**仍未统一：前者由调用方指定，后者由
+   `ClusterPlanner::first_generation()` 给出。

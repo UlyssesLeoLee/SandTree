@@ -185,6 +185,70 @@ pub struct ProviderInstance {
 }
 
 impl ProviderInstance {
+    /// A bundle that serves no ports at all.
+    ///
+    /// Legitimate for a lifecycle-only generation: a component can be staged,
+    /// health checked, migrated and retired without exposing any provider port.
+    /// Prefer this over a five-field literal — it is the only way to add a port
+    /// later without touching every construction site.
+    pub fn empty(plugin_id: PluginId) -> Self {
+        Self {
+            plugin_id,
+            generation: 0,
+            resource: None,
+            observation: None,
+            files: None,
+            exec: None,
+        }
+    }
+
+    /// Copy a bundle, ports and identity alike.
+    ///
+    /// `ProviderInstance` cannot derive `Clone` (the ports are trait objects),
+    /// but a bundle has to be handed out more than once — the plugin host owns
+    /// one and the kernel registry is a projection of it (ADR-016). The `Arc`s
+    /// are cheap; the identity fields are copied verbatim, and whoever owns the
+    /// result is responsible for stating the authoritative identity (see
+    /// `sandtree_plugin_host::LoadedGeneration::new`).
+    pub fn clone_ports(other: &Self) -> Self {
+        Self {
+            plugin_id: other.plugin_id.clone(),
+            generation: other.generation,
+            resource: other.resource.clone(),
+            observation: other.observation.clone(),
+            files: other.files.clone(),
+            exec: other.exec.clone(),
+        }
+    }
+
+    /// Builder: attach the resource port.
+    #[must_use]
+    pub fn with_resource(mut self, port: std::sync::Arc<dyn ResourceProvider>) -> Self {
+        self.resource = Some(port);
+        self
+    }
+
+    /// Builder: attach the observation port.
+    #[must_use]
+    pub fn with_observation(mut self, port: std::sync::Arc<dyn ObservationProvider>) -> Self {
+        self.observation = Some(port);
+        self
+    }
+
+    /// Builder: attach the file port.
+    #[must_use]
+    pub fn with_files(mut self, port: std::sync::Arc<dyn FileProvider>) -> Self {
+        self.files = Some(port);
+        self
+    }
+
+    /// Builder: attach the exec port.
+    #[must_use]
+    pub fn with_exec(mut self, port: std::sync::Arc<dyn ExecProvider>) -> Self {
+        self.exec = Some(port);
+        self
+    }
+
     /// Whether this instance can service resource lifecycle calls.
     pub fn has_resource(&self) -> bool {
         self.resource.is_some()
@@ -193,6 +257,14 @@ impl ProviderInstance {
     /// Whether this instance can produce observation snapshots.
     pub fn has_observation(&self) -> bool {
         self.observation.is_some()
+    }
+
+    /// Whether this instance serves no port at all.
+    pub fn is_empty(&self) -> bool {
+        self.resource.is_none()
+            && self.observation.is_none()
+            && self.files.is_none()
+            && self.exec.is_none()
     }
 }
 
