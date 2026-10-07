@@ -2,6 +2,8 @@
 
 本文件描述**代码实现**如何落地已批准设计基线。设计基线文档（`*.docx`）只读；本文件不替代设计，只记录实现选择与偏差。
 
+偏差的正式记录见 [`ADR.md`](ADR.md)。
+
 ## 1. 构建
 
 ```powershell
@@ -11,8 +13,17 @@
 
 # 或手动（cargo 不在本机 PATH）
 $env:PATH="$env:USERPROFILE\.rustup\toolchains\1.98-x86_64-pc-windows-msvc\bin;$env:PATH"
-$env:CARGO_HOME="$env:USERPROFILE\.cargo"
-cargo test --workspace
+$env:CARGO_HOME="E:\DevCache\cargo"
+cargo test --workspace --offline
+```
+
+质量门禁（缺一不可）：
+
+```powershell
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --offline -- -D warnings
+cargo test --workspace --offline
+python scripts\license_gate.py          # cargo deny 的离线等价物，见 §6
 ```
 
 本机环境事实（实现时验证）：
@@ -21,12 +32,12 @@ cargo test --workspace
 | --- | --- |
 | Rust | 1.98-x86_64-pc-windows-msvc（toolchain 在 `%USERPROFILE%\.rustup\toolchains`，rustup shim 缺失，故走 `scripts/dev.ps1`） |
 | MSVC | VS 2022 Community 14.44，`cl.exe`/`link.exe` 可用 |
-| cargo-deny / cargo-about | 需 `cargo install`，CI 中安装 |
-| Docker | CLI 存在（Docker Desktop）；本机 daemon 未运行 ⇒ provider 必须降级为 `Unavailable` 而不是报错阻塞（FR-001/NFR-A01 的真实演练） |
-| Multipass | CLI 存在 |
-| Windows Sandbox | `wsb.exe` 存在 |
-
-> Docker daemon 未运行这件事本身被当作验收场景使用：`sandtree` 必须在只有部分 provider 可用时仍能启动并给出可诊断的健康状态。
+| `CARGO_HOME` | `E:\DevCache\cargo`（本地盘）；`%USERPROFILE%\.cargo` 另有一份，历史依赖在那边，license 门禁两处都扫 |
+| `CARGO_TARGET_DIR` | `E:\DevCache\cargo\target`（仓库外）。**多 worktree 并行时必须按 lane 分目录**，否则 cargo 包缓存锁会让并行构建退化成串行 |
+| cargo-deny / cargo-about | **未安装**，本机无法执行；由 `scripts/license_gate.py` 离线替代（见 §6） |
+| Docker | CLI + daemon 均可用（server 29.8.2）。但 provider 测试**必须与 daemon 状态无关**，因此一律走 fixture 或注入不可达 endpoint |
+| Multipass / Windows Sandbox | CLI / `wsb.exe` 存在，但无法在 CI 驱动 → 观测面无真实联调，由 mock 项目覆盖 |
+| wasm32 target | **无法安装**（无 rustup shim）→ 不能交叉编译真实 `.wasm`；`plugin-host` 的 component 加载路径由 WAT fixture 覆盖 |
 
 ## 2. crate 与职责
 
@@ -41,9 +52,22 @@ cargo test --workspace
 | `store` | SQLite repositories、CAS、migration、retention | provider SDK |
 | `observation-core` | 策略协商、调度合并、缓存/freshness、归一化与限额 | provider SDK |
 | `sdk` | plugin/app manifest + provider ports（公共 ABI 的 Rust 侧类型） | Wasmtime |
-| `plugin-host` | Wasmtime Component Model、generation 路由、hot swap | — |
+| `plugin-host` | Wasmtime Component Model、generation 路由、hot swap、install policy、worker limits | — |
 | `kernel` | PluginSupervisor/ResourceManager/OperationManager/WorkspaceManager/SnapshotManager/EventRouter/StoreManager | provider SDK、rusqlite（经 port） |
 | `ipc` | 帧编解码、方法路由、named pipe 传输 | — |
+| `plugin-host`/`wit/` | ADR-004 的本地 WIT 副本 | — |
+
+provider（实现 `sdk` ports）：
+
+| crate | 设计依据 | 关键形状 |
+| --- | --- | --- |
+| `plugins/provider-docker` | DD-PLG §5 | bollard 0.18；endpoint 解析；host policy 拒绝危险路径 |
+| `plugins/provider-multipass` | DD-PLG §9 | `multipass list/info --format json` + `exec`；CLI 缺失 → `Unavailable` 而非空 batch |
+| `plugins/provider-windows-sandbox` | DD-PLG §7 / §12.4 | `.wsb` 解析 + probe envelope 校验；bootstrap 只读、映射限 outbox |
+| `plugins/provider-docker-sandbox` | DD-PLG §8 / §12.2 | 三级降级 API → CLI → fixture；所有 tier 的 trust 均为 `guest_probe` |
+| `plugins/feature-compose` | DD-PLG §6 / FR-030..032 | 消费 Docker provider 已有的 label 分组；生命周期经注入的 `ComposeRunner` |
+
+apps：`daemon`（IPC 服务 + EventPump + `--check` 自检）、`cli`、`plugin-worker`、`probe-windows`。
 
 依赖方向与 API 冻结在 `docs/CONTRACTS.md`。
 
@@ -52,11 +76,13 @@ cargo test --workspace
 1. **Observation 失败不是错误**：`ObservationSnapshot::empty(..., health=Unavailable)` 是合法返回值；
    只有协议/安全违规（如 probe envelope 非法）才产生 `DomainError`（ADR-OBS-001）。
 2. **Trust 不提升**：`Provenance::with_evidence` 只加 hash，不改 `trust`；
-   快照整体可信度取 `weakest_trust()`（ADR-OBS-003）。
+   快照整体可信度取 `weakest_trust()`（ADR-OBS-003）。`TrustLevel` 的派生 `Ord` 与信任强度**方向相反**
+   （枚举按展示序声明，最强在前），任何信任推理必须走 `TrustLevel::rank()` / `at_most()`。
 3. **destructive precondition 需要 host 级可信数据**：`TrustPolicy` 默认要求
    `TrustLevel::HostNative`，`guest_probe` 一律拒绝并返回 `ST-OBS-009`。
-4. **stale ≠ 不存在**：reconcile 先 `Unknown`，超过 grace 才 `Tombstoned`；
-   单轮未发现不会删除资源。
+4. **stale ≠ 不存在**：reconcile **先删（基于上一轮 stale 状态）后扫**（DD-SW §5），保证
+   `unknown` 至少可见一轮；`mark_resources_stale` 用 provider **本轮实际返回**的 seen 集合，
+   绝不从 DB 回读，否则「provider 停止上报」永不生效。
 5. **VFS 双重检查**：路由前 normalize（`vfs`），mutation 前 provider 内再 canonicalize
    （处理 symlink/reparse），两道都必须过。
 6. **事件背压**：慢订阅者队列满时合并 `ResourceChanged`，保留 audit/error 事件，
@@ -65,26 +91,69 @@ cargo test --workspace
    失败不留半成品可见 snapshot（FR-044）。孤立对象由 GC 标记扫描回收。
 8. **Hash 惰性**：`ContentHashState` 四态；只有 mtime/size 变化、snapshot、diff
    或显式请求才计算 BLAKE3（FR-077）。
+9. **审计 action 必须带命名空间**：`AuditRecord::is_privileged()` 按 `<kind>.<verb>` 的
+   namespace 判定。记录裸动词（`destroy`）会让**所有**破坏性操作被标成非特权（NFR-S03）。
+10. **CLI 缺失是降级不是消失**：compose 在无 CLI 时报 `Degraded` 而非 `Unavailable`
+    （FR-031 是 SHOULD，发现能力必须存活）；docker-sandbox 在无 API 无 CLI 时走 fixture tier，
+    仍能 `discover`。
 
-## 4. 未在本仓实现的部分（及原因）
+## 4. 测试分层（对齐 ARCH §11 / tests/）
+
+| 层 | 位置 | 内容 |
+| --- | --- | --- |
+| UT | 各 crate 内 `#[cfg(test)]` | 纯算法：URI、capability、reconcile、trust、framing、envelope 限额 |
+| Contract | `tests/contract/tests/scenarios.rs` | 错误码双注册表、WIT 包名、manifest/DDL 与代码一致性、wire 名 |
+| Integration | `tests/integration/tests/scenarios.rs` | 跨 crate 流程，provider 为 fake |
+| System | `tests/system/tests/scenarios.rs` | 破坏性操作确认+审计、观测信任不上升、IPC 抗截断 |
+| Mock | `mock/**`（并行 lane 产出，见 `mock/LANES.md`） | 全栈在零真实 runtime 下可回归 |
+
+`tests/{contract,integration,system}` 是**测试二进制**而非 library。这不是风格问题：
+声明为 `[lib]` 时 `cargo clippy --all-targets` 会同时构建「非测试 lib」和「测试目标」两份，
+于是所有测试辅助类型在 lib 那份里都是死代码，门禁被结构性噪声淹没。
+
+### 反真空断言
+
+本轮从仓库自己的测试里清掉 3 条恒真断言（`assert!(n >= 0)`、`assert!(x || !x)`）。
+把它们换成真断言后，其中一条立刻变红，并牵出上面第 9 条的审计缺陷 —— 说明它们一直在
+「通过」的同时什么都没验。**新增测试禁止恒真断言**。
+
+## 5. mock 项目（并行 lane）
+
+`mock/LANES.md` 是 lane 契约。三条 lane 各自独立 worktree + 独立 `CARGO_TARGET_DIR`：
+
+| Lane | 目录 | 解决的问题 |
+| --- | --- | --- |
+| A | `mock/runtime/` | 收敛 `tests/integration` 的 `Fake` 与 `tests/system` 的 `World` 两份重复 fake |
+| B | `mock/observation/` | 观测面零回归：ADR-OBS-001 / ADR-OBS-003 的故障注入 |
+| C | `mock/wasm-components/` | 无 wasm32 target → WAT fixture 覆盖 component 加载路径 |
+
+## 6. license 门禁（cargo-deny 的离线替代）
+
+`cargo deny check` 是 NFR-E03 的门禁，但本机无 `cargo-deny` 二进制且无法联网安装。
+`scripts/license_gate.py` 对同一问题做等价审计：
+
+- **license**：读 `Cargo.lock` 拿 name/version/source，再从 cargo registry 取该版本的
+  **权威 manifest** 解析 SPDX。数据源顺序是 `registry/src/<n>-<v>/Cargo.toml` →
+  `registry/cache/<i>/<n>-<v>.crate`（tarball）。**不能**读 Cargo.lock（没有 license 字段），
+  也**不能**读 `registry/index/.cache`（该缓存不含 license 键）。OR 取任一分支可接受、
+  AND 需全部可接受、`A/B` 视作 `A OR B`，与 cargo-deny 语义一致。
+- **source**：全部 package 必须来自 crates.io，git source 一律拒绝。
+- **自失效阈值**：扫不到任何三方包、或解析不出任何 license，直接 FAIL —— 「扫不到」必须与
+  「没问题」区分开。
+- `scripts/license_gate_mutation_test.py` 做变异验证：确认门禁在输入被破坏时真的会红，
+  且还原后按 sha256 校验输入一致。
+
+## 7. 未在本仓实现的部分（及原因）
 
 | 项 | 原因 | 影响 |
 | --- | --- | --- |
 | `apps/desktop`（Tauri 2 GUI） | 需要完整前端工具链与 WebView2 打包流程，构建体量与验证成本远超本轮；FR-060 的 UI 契约已由 `ipc` 方法族与 CLI 覆盖 | UI 需后续补齐；kernel/CLI 契约不变 |
 | `optional/{search-tantivy, git-gix, integration-mcp, agent-observer}` | 设计中明确为 OPTIONAL，且 FR-O01/FR-O02 不属于核心 | 无功能影响 |
-| `Docker Sandboxes` 实验 API 的真实联调 | 该 API 为 experimental，且本机 Docker daemon 未运行 | provider 以 schema adapter + capability probe 实现，失败回退 metadata-only（DD-PLG §12.2 已规定） |
-| wasm 组件示例插件（.wasm 产物） | 本机无 rustup shim，无法安装 `wasm32-wasip2` target 交叉编译 | `plugin-host` 的 component 加载路径用 fixture/错误路径测试覆盖；ABI 由 `wit/` 与 `schemas/*.wit` 冻结 |
+| 真实 `.wasm` 组件产物 | 本机无 rustup shim，无法安装 `wasm32-wasip2` target 交叉编译 | `plugin-host` 的 component 加载路径由 WAT fixture 覆盖；ABI 由 `wit/` 与 `schemas/*.wit` 冻结 |
+| `Docker Sandboxes` 实验 API 真实联调 | 该 API 为 experimental | provider 以 capability probe + CLI 降级 + fixture 兜底实现（DD-PLG §8 明文要求的三级降级） |
+| `cargo deny check advisories` | 无 cargo-deny 二进制 | license/source 两项已由离线门禁覆盖；advisory（RustSec）一项未覆盖 |
 
-## 5. 测试分层（对齐 ARCH §11 / tests/）
-
-| 层 | 位置 | 内容 |
-| --- | --- | --- |
-| UT | 各 crate 内 `#[cfg(test)]` | 纯算法：URI、capability、reconcile、trust、framing、envelope 限额 |
-| Contract | `tests/contract` | manifest 校验、WIT 契约字段、错误码注册表、schema 一致性 |
-| Integration | `tests/integration` | 真实 provider（Docker/Multipass/WSB）+ 内存 store + fake clock |
-| System | `tests/system` | daemon + IPC + CLI 端到端，多 provider 降级场景 |
-
-## 6. 追溯
+## 8. 追溯
 
 `traceability/requirements_to_tests.csv` 记录 FR/NFR → 测试 ID 映射；
 新增实现必须补一行映射，并在代码中以 `// FR-xxx` / `// NFR-xx` 标注落点。
