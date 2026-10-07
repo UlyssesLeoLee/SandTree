@@ -53,6 +53,9 @@
 #![deny(missing_docs)]
 
 pub mod fixtures;
+pub mod manifest;
+pub mod tests;
+pub mod wit_equivalence;
 
 /// Live-engine validation of the corpus (default-OFF `engine` feature).
 #[cfg(feature = "engine")]

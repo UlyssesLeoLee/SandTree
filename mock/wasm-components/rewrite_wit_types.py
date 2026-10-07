@@ -1,16 +1,15 @@
-"""One-shot: export the named types *before* the instances that use them.
+"""One-shot: bind each exported named type with an `eq` ascription.
 
-The validator registers an exported type into `exported_types` as it walks the
-component's exports in order, and an instance export only validates if every
-value type its functions mention is already in that set. Emitting the type
-exports first is therefore required, not stylistic.
+A component may only export a function whose value types are named. Exporting a
+type creates a *freshly aliased* type identity, so a function that keeps
+referring to the original type id is not considered to be referring to a named
+type. Ascribing the export as `(type (eq $t))` binds the exported name to the
+existing type, which is what wit-component emits for every generated component.
 """
 
 import pathlib
+import re
 import sys
-
-BLOCK_START = "  ;; --- the named types the exported functions refer to ---"
-FIRST_EXPORT = "\n  (export \""
 
 FILES = [
     "fixtures/valid_provider_component.wat",
@@ -19,19 +18,14 @@ FILES = [
     "fixtures/missing_required_export.wat",
 ]
 
+PATTERN = re.compile(r'^(\s*\(export "([a-z0-9-]+)" \(type \$([a-z0-9-]+)\)\)\s*)$', re.M)
+
 root = pathlib.Path(sys.argv[1])
 for rel in FILES:
     p = root / rel
     text = p.read_text(encoding="utf-8", newline="")
-    if BLOCK_START not in text:
-        print(f"SKIP: {rel}")
-        continue
-    i = text.index(BLOCK_START)
-    assert text.endswith(")\n"), rel
-    j = len(text) - len(")\n")
-    block = text[i:j]
-    rest = text[:i].rstrip("\n") + "\n"
-    k = rest.index(FIRST_EXPORT) + 1
-    out = rest[:k] + block.rstrip("\n") + "\n\n" + rest[k:].lstrip("\n") + ")\n"
-    p.write_text(out, encoding="utf-8", newline="")
-    print(f"reordered: {rel}")
+    new, n = PATTERN.subn(
+        lambda m: f'{m.group(1)} (type (eq ${m.group(3)})))', text
+    )
+    p.write_text(new, encoding="utf-8", newline="")
+    print(f"{rel}: ascribed {n} type exports")
