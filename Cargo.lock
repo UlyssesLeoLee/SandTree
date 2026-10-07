@@ -1567,6 +1567,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sandtree-mock-runtime"
+version = "1.1.0"
+dependencies = [
+ "async-trait",
+ "sandtree-model",
+ "sandtree-observation-model",
+ "sandtree-sdk",
+ "sandtree-vfs",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "sandtree-mock-wasm-components"
+version = "1.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wasmtime",
+]
+
+[[package]]
 name = "sandtree-model"
 version = "1.1.0"
 dependencies = [
