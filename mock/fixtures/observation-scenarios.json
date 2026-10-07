@@ -122,6 +122,18 @@
       "observed_at": "2026-10-07T00:00:00Z"
     },
     {
+      "resource": ["mock", "wsb-subcollector-degraded"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "hostname": "wsb-subcollector-degraded" }
+      },
+      "trust": "guest_probe",
+      "health": "degraded",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "collector_version": "probe/2"
+    },
+    {
       "resource": ["mock", "multipass-deadline"],
       "modes": ["exec", "metadata"],
       "domains": ["system", "health"],
@@ -164,7 +176,7 @@
         "docker": { "engine": "nested", "containers": [] }
       },
       "trust": "provider_native",
-      "health": "healthy",
+      "health": "degraded",
       "observed_at": "2026-10-07T00:00:00Z",
       "fault": {
         "kind": "nested_docker_unavailable",

@@ -191,8 +191,14 @@ mod tests {
         assert_eq!(d.ceiling, TrustLevel::GuestProbe);
         assert_eq!(d.effective, TrustLevel::GuestProbe);
         assert!(d.refused_upgrade);
-        assert!(!is_permitted(ObservationMode::Probe, TrustLevel::HostNative));
-        assert!(!is_permitted(ObservationMode::Probe, TrustLevel::RemoteExec));
+        assert!(!is_permitted(
+            ObservationMode::Probe,
+            TrustLevel::HostNative
+        ));
+        assert!(!is_permitted(
+            ObservationMode::Probe,
+            TrustLevel::RemoteExec
+        ));
         assert!(is_permitted(ObservationMode::Probe, TrustLevel::GuestProbe));
     }
 

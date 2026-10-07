@@ -205,10 +205,7 @@ impl Default for ResourceObservation {
             modes: default_modes(),
             domains: vec![ObservationDomain::System],
             mode_domains: BTreeMap::new(),
-            values: BTreeMap::from([(
-                ObservationDomain::System.as_str().to_string(),
-                Json::Null,
-            )]),
+            values: BTreeMap::from([(ObservationDomain::System.as_str().to_string(), Json::Null)]),
             trust: default_trust(),
             declared_ceiling: None,
             health: default_health(),
@@ -285,10 +282,7 @@ impl ResourceObservation {
 
     /// Declare the trust this resource's values claim.
     pub fn with_trust(self, trust: TrustLevel) -> Self {
-        Self {
-            trust,
-            ..self
-        }
+        Self { trust, ..self }
     }
 
     /// Declare a ceiling that may only lower the mode ceiling.
@@ -301,10 +295,7 @@ impl ResourceObservation {
 
     /// Declare the channel state.
     pub fn with_health(self, health: ObservationHealth) -> Self {
-        Self {
-            health,
-            ..self
-        }
+        Self { health, ..self }
     }
 
     /// Script a fault.
@@ -508,6 +499,48 @@ fn is_sorted_and_unique(list: &[ObservationDomain]) -> bool {
     list.windows(2).all(|w| w[0] < w[1])
 }
 
+/// Deserialize the fixture's `resources` array into a map keyed by derived
+/// identity.
+///
+/// Also the place where a duplicate resource name is caught: two entries that
+/// derive the same identity would otherwise silently overwrite each other and
+/// the fixture would describe one world while appearing to describe two.
+fn resource_map_from_array<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<String, ResourceObservation>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let list = Vec::<ResourceObservation>::deserialize(deserializer)?;
+    let mut map = BTreeMap::new();
+    for resource in list {
+        let key = resource.id().as_str().to_string();
+        if map.insert(key.clone(), resource).is_some() {
+            return Err(serde::de::Error::custom(format!(
+                "fixture declares resource {key} twice"
+            )));
+        }
+    }
+    Ok(map)
+}
+
+/// Serialize the fixture's `resources` map back to an array, in identity order.
+///
+/// The mirror of [`resource_map_from_array`], so a fixture round-trips through
+/// JSON unchanged and stays reviewable in a diff.
+fn resource_map_to_array<S>(
+    resources: &BTreeMap<String, ResourceObservation>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serde::Serialize::serialize(
+        &resources.values().collect::<Vec<&ResourceObservation>>(),
+        serializer,
+    )
+}
+
 /// A complete scripted observation world.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObservationFixture {
@@ -516,7 +549,16 @@ pub struct ObservationFixture {
     /// Provenance source recorded on every value, e.g. `mock-probe`.
     pub source: String,
     /// Scripted resources, keyed by derived identity so iteration is sorted.
-    #[serde(default)]
+    ///
+    /// Authored and emitted as a JSON **array** (see
+    /// [`resource_map_from_array`] / [`resource_map_to_array`]): a hand written
+    /// fixture reads far better as an ordered list than as an object whose keys
+    /// are derived hashes nobody can check by eye.
+    #[serde(
+        default,
+        deserialize_with = "resource_map_from_array",
+        serialize_with = "resource_map_to_array"
+    )]
     resources: BTreeMap<String, ResourceObservation>,
 }
 
@@ -539,8 +581,8 @@ impl ObservationFixture {
 
     /// Parse and validate a fixture from JSON.
     pub fn from_json(text: &str) -> Result<Self, FixtureError> {
-        let fixture: Self = serde_json::from_str(text)
-            .map_err(|e| FixtureError::Malformed(e.to_string()))?;
+        let fixture: Self =
+            serde_json::from_str(text).map_err(|e| FixtureError::Malformed(e.to_string()))?;
         fixture.validate()?;
         Ok(fixture)
     }
@@ -626,10 +668,7 @@ mod tests {
         assert_eq!(r.modes(), &[ObservationMode::Metadata]);
         assert_eq!(r.trust(), TrustLevel::HostNative);
         assert_eq!(r.domains(), &[ObservationDomain::System]);
-        assert_eq!(
-            r.value_for(ObservationDomain::System),
-            Some(&Json::Null)
-        );
+        assert_eq!(r.value_for(ObservationDomain::System), Some(&Json::Null));
     }
 
     #[test]
@@ -687,7 +726,10 @@ mod tests {
     #[test]
     fn an_unparsable_timestamp_is_refused() {
         let r = resource().with_observed_at("last tuesday");
-        assert!(matches!(r.validate(), Err(FixtureError::BadTimestamp { .. })));
+        assert!(matches!(
+            r.validate(),
+            Err(FixtureError::BadTimestamp { .. })
+        ));
     }
 
     #[test]
@@ -748,7 +790,7 @@ mod tests {
         let text = json!({
             "schema": "sandtree.mock.observation.v99",
             "source": "mock",
-            "resources": {}
+            "resources": []
         })
         .to_string();
         assert_eq!(
@@ -770,20 +812,21 @@ mod tests {
 
     #[test]
     fn an_empty_source_is_refused() {
-        let f = ObservationFixture::from_json(&json!({
-            "schema": FIXTURE_SCHEMA,
-            "source": "   ",
-            "resources": {}
-        })
-        .to_string());
+        let f = ObservationFixture::from_json(
+            &json!({
+                "schema": FIXTURE_SCHEMA,
+                "source": "   ",
+                "resources": []
+            })
+            .to_string(),
+        );
         assert_eq!(f, Err(FixtureError::EmptySource));
     }
 
     #[test]
     fn a_fixture_round_trips_through_json_unchanged() {
-        let fixture = ObservationFixture::new("mock-probe").with_resource(
-            resource().evidence(true).with_collector_version("probe/1"),
-        );
+        let fixture = ObservationFixture::new("mock-probe")
+            .with_resource(resource().evidence(true).with_collector_version("probe/1"));
         let text = serde_json::to_string_pretty(&fixture).expect("serialize");
         let parsed = ObservationFixture::from_json(&text).expect("parse");
         assert_eq!(parsed, fixture);
@@ -812,16 +855,15 @@ mod tests {
         let r = resource().with_fault(ObservationFault::ProbeBootstrapFailed {
             reason: "no bridge".into(),
         });
-        assert_eq!(
-            r.disposition(),
-            Some(FaultDisposition::UnavailableSnapshot)
-        );
+        assert_eq!(r.disposition(), Some(FaultDisposition::UnavailableSnapshot));
         let surfaced = resource().with_fault(ObservationFault::InvalidEnvelope {
             reason: "schema".into(),
         });
         assert_eq!(surfaced.disposition(), Some(FaultDisposition::SurfaceError));
         assert_eq!(
-            surfaced.with_disposition(FaultDisposition::UnavailableSnapshot).disposition(),
+            surfaced
+                .with_disposition(FaultDisposition::UnavailableSnapshot)
+                .disposition(),
             Some(FaultDisposition::UnavailableSnapshot)
         );
         assert_eq!(resource().disposition(), None);

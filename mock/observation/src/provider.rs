@@ -244,9 +244,7 @@ impl ScriptedObservation {
         let Some(mode) = select_mode(resource, &requested) else {
             return Err(DomainError::new(
                 ErrorCode::OBS_NO_STRATEGY,
-                format!(
-                    "resource {id} offers no mode that can serve the requested domains"
-                ),
+                format!("resource {id} offers no mode that can serve the requested domains"),
             ));
         };
 
@@ -267,8 +265,7 @@ impl ScriptedObservation {
         // DD-OBS §12 / NFR-S08: a protocol or security violation surfaces. It is
         // never degraded into a snapshot, because a swallowed hostile envelope
         // is worse than a visible failure.
-        if fault.is_some() && disposition == Some(FaultDisposition::SurfaceError) {
-            let fault = fault.expect("fault present when disposition is SurfaceError");
+        if let (Some(fault), Some(FaultDisposition::SurfaceError)) = (fault, disposition) {
             return Err(fault.to_domain_error());
         }
 
@@ -320,7 +317,10 @@ impl ScriptedObservation {
             // it reports the mode, the deadline and the warnings of this very
             // collection (DD-OBS §5).
             let (payload, partial) = if *domain == ObservationDomain::Health {
-                (self.health_payload(mode, deadline_ms, &requested, &served), false)
+                (
+                    self.health_payload(mode, deadline_ms, &requested, &served),
+                    false,
+                )
             } else {
                 match resource.value_for(*domain) {
                     Some(value) => (
@@ -340,9 +340,8 @@ impl ScriptedObservation {
             if resource.attaches_evidence() {
                 // ADR-OBS-003: the hash travels with the value; the trust rung
                 // does not move, because the reporter produced the bytes.
-                provenance = provenance.with_evidence(
-                    &serde_json::to_vec(&payload).unwrap_or_default(),
-                );
+                provenance =
+                    provenance.with_evidence(&serde_json::to_vec(&payload).unwrap_or_default());
             }
             if partial {
                 partial_domains.push(domain.as_str());
@@ -424,10 +423,7 @@ impl ScriptedObservation {
 
 #[async_trait::async_trait]
 impl ObservationProvider for ScriptedObservation {
-    async fn capabilities(
-        &self,
-        id: &ResourceId,
-    ) -> Result<ObservationCapabilities, DomainError> {
+    async fn capabilities(&self, id: &ResourceId) -> Result<ObservationCapabilities, DomainError> {
         self.capability_calls.fetch_add(1, Ordering::SeqCst);
         let resource = self.resource_for(id)?;
         Ok(self.capabilities_for(resource))
@@ -439,10 +435,7 @@ impl ObservationProvider for ScriptedObservation {
     /// a dead observation channel; returns `Err` only for a rejected envelope or
     /// an escaping guest path. The resource is never removed from the scripted
     /// world either way (ADR-OBS-001).
-    async fn observe(
-        &self,
-        req: &ObservationRequest,
-    ) -> Result<ObservationSnapshot, DomainError> {
+    async fn observe(&self, req: &ObservationRequest) -> Result<ObservationSnapshot, DomainError> {
         self.observe_calls.fetch_add(1, Ordering::SeqCst);
         let resource = self.resource_for(&req.resource_id)?;
         self.snapshot_for(resource, &req.resource_id, req)
@@ -466,7 +459,11 @@ mod tests {
     fn probe_resource() -> ResourceObservation {
         ResourceObservation::new(&["mock", "wsb"])
             .with_modes(&[ObservationMode::Probe, ObservationMode::Metadata])
-            .with_domains(&[ObservationDomain::Filesystem, ObservationDomain::Process, ObservationDomain::System])
+            .with_domains(&[
+                ObservationDomain::Filesystem,
+                ObservationDomain::Process,
+                ObservationDomain::System,
+            ])
             .with_value(
                 ObservationDomain::System,
                 json!({"os": "windows", "arch": "x86_64"}),
@@ -492,14 +489,20 @@ mod tests {
     #[tokio::test]
     async fn picks_the_least_invasive_mode_that_can_serve_the_request() {
         let p = provider();
-        let caps = p.capabilities(&ResourceId::derive(&["mock", "wsb"])).await.unwrap();
+        let caps = p
+            .capabilities(&ResourceId::derive(&["mock", "wsb"]))
+            .await
+            .unwrap();
         assert_eq!(
             caps.modes,
             vec![ObservationMode::Probe, ObservationMode::Metadata],
             "caps must be listed in negotiation order"
         );
 
-        let snap = p.observe(&request(&[ObservationDomain::System])).await.unwrap();
+        let snap = p
+            .observe(&request(&[ObservationDomain::System]))
+            .await
+            .unwrap();
         assert_eq!(snap.mode, ObservationMode::Probe);
         assert_eq!(snap.health, ObservationHealth::Healthy);
         assert_eq!(snap.values.len(), 1);
@@ -595,7 +598,10 @@ mod tests {
                     }),
             ),
         );
-        let caps = p.capabilities(&ResourceId::derive(&["mock", "wsb"])).await.unwrap();
+        let caps = p
+            .capabilities(&ResourceId::derive(&["mock", "wsb"]))
+            .await
+            .unwrap();
         assert!(caps.requires_native_credential);
         assert!(caps.supports(ObservationMode::Native));
         assert!(!caps.supports(ObservationMode::Exec));

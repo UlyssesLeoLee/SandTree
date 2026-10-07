@@ -145,7 +145,9 @@ impl ObservationFault {
             }
             // Some values are still valid, so the snapshot survives.
             ObservationFault::PartialCoverage { .. }
-            | ObservationFault::NestedDockerUnavailable { .. } => FaultDisposition::DegradedSnapshot,
+            | ObservationFault::NestedDockerUnavailable { .. } => {
+                FaultDisposition::DegradedSnapshot
+            }
             // The channel is gone but the resource is not (FR-079).
             ObservationFault::DeadlineExceeded { .. }
             | ObservationFault::ProbeBootstrapFailed { .. }
@@ -188,7 +190,10 @@ impl ObservationFault {
             ),
             ObservationFault::PartialCoverage { missing_domains } => {
                 let names: Vec<&str> = missing_domains.iter().map(|d| d.as_str()).collect();
-                format!("domains not reported by the collector: {}", names.join(", "))
+                format!(
+                    "domains not reported by the collector: {}",
+                    names.join(", ")
+                )
             }
         }
     }
@@ -198,9 +203,7 @@ impl ObservationFault {
     /// Provider-supplied detail goes into `detail`, never into `message`
     /// (DD-DATA §8): the message is what a UI renders.
     pub fn to_domain_error(&self) -> DomainError {
-        let code = self
-            .code()
-            .unwrap_or_else(|| ErrorCode::OBS_NO_STRATEGY);
+        let code = self.code().unwrap_or(ErrorCode::OBS_NO_STRATEGY);
         let message = match self {
             ObservationFault::DeadlineExceeded { .. } => "observation deadline exceeded",
             ObservationFault::InvalidEnvelope { .. } => "probe envelope rejected",
