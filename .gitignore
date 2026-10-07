@@ -36,3 +36,6 @@ coverage/
 # NOTE: the approved design baseline (00..11_*.docx), schemas/, traceability/,
 # tests/test_cases.json and PACKAGE_MANIFEST.csv are deliberately NOT ignored.
 # They are tracked, read-only inputs that the implementation must match.
+# Python bytecode caches from the offline gates (scripts/license_gate.py).
+__pycache__/
+*.pyc
