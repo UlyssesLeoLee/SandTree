@@ -192,10 +192,15 @@ impl WorkspaceFs {
     }
 
     /// Direct children of a directory, in path order.
+    ///
+    /// A root entry's [`FileEntry::parent_path`] is `None`, not `Some("")`, so
+    /// the root directory is matched explicitly. Without this, listing a
+    /// workspace root returns nothing at all while listing `src` works — the
+    /// asymmetry that makes an empty root listing look like an empty workspace.
     pub fn children(&self, dir: &str) -> Vec<&FileEntry> {
         self.entries
             .values()
-            .filter(|e| e.parent_path() == Some(dir))
+            .filter(|e| e.parent_path().unwrap_or("") == dir)
             .collect()
     }
 
@@ -829,13 +834,12 @@ impl ScriptedWorld {
             let Some(parent_key) = spec.parent.as_deref() else {
                 continue;
             };
-            let parent_id = nodes
-                .get(parent_key)
-                .map(|p| p.id.clone())
-                .ok_or_else(|| FixtureError::Invalid {
+            let parent_id = nodes.get(parent_key).map(|p| p.id.clone()).ok_or_else(|| {
+                FixtureError::Invalid {
                     field: format!("resources[{}].parent", spec.key),
                     reason: format!("unknown parent key {parent_key:?}"),
-                })?;
+                }
+            })?;
             let child = nodes
                 .get_mut(spec.key.as_str())
                 .ok_or_else(|| FixtureError::Invalid {

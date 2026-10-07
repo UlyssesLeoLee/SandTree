@@ -7,20 +7,18 @@
 
 use std::sync::Arc;
 
+use sandtree_mock_runtime::file_provider::workspace_uri;
+use sandtree_mock_runtime::{
+    discover_all, fixtures, resource_provider::ScriptedResourceProvider, FailurePhase,
+    ScriptedWorld,
+};
 use sandtree_model::error::{DomainError, ErrorCode};
 use sandtree_model::id::{PluginId, ResourceId};
 use sandtree_model::operation::{OperationKind, OperationRequest};
 use sandtree_model::resource::{Correlation, ResourceNode};
-use sandtree_sdk::ports::{
-    DiscoverBatch, ProviderDescriptor, ProviderHealth, ResourceProvider,
-};
-use sandtree_mock_runtime::file_provider::workspace_uri;
-use sandtree_mock_runtime::{
-    discover_all, FailurePhase, fixtures, resource_provider::ScriptedResourceProvider,
-    ScriptedWorld,
-};
-use serde_json::json;
+use sandtree_sdk::ports::{DiscoverBatch, ProviderDescriptor, ProviderHealth, ResourceProvider};
 use sandtree_vfs::ReadWindow;
+use serde_json::json;
 
 fn world() -> ScriptedWorld {
     ScriptedWorld::from_json_str(fixtures::DOCKER_WORLD).expect("the built-in docker world loads")
@@ -34,6 +32,107 @@ fn web() -> ResourceId {
     ResourceId::derive(&["abc123def456"])
 }
 
+// --- termination --------------------------------------------------------------
+//
+// A paginated scan that forgets to stop does not fail: it pages forever and
+// grows its own page buffer until the allocator gives up. These tests pin the
+// three ways out, and the first one is the one that matters most -- a provider
+// saying "no more pages" must end the scan rather than restart it.
+
+#[tokio::test]
+async fn a_provider_that_ends_its_cursor_chain_terminates_the_scan() {
+    let w = world();
+    let expected_pages = w.page_count();
+    let expected_resources = w.resources().len();
+    // A one-page world would make every assertion below trivially true, so
+    // refuse to run against a fixture that cannot exercise pagination at all.
+    assert!(
+        expected_pages > 1,
+        "the docker world must span more than one page, got {expected_pages}"
+    );
+
+    let scan = discover_all(&[as_port(w)]).await;
+
+    assert!(
+        scan.is_complete(),
+        "a well-behaved provider must not record a failure: {:?}",
+        scan.failures
+    );
+    assert_eq!(
+        scan.discoveries[0].pages.len(),
+        expected_pages,
+        "the scan must stop after the world's own page count, not keep paging"
+    );
+    assert!(
+        scan.discoveries[0].completed(),
+        "the last delivered page must be the one with no cursor"
+    );
+    assert_eq!(
+        scan.resources.len(),
+        expected_resources,
+        "every resource must be delivered exactly once across the pages"
+    );
+}
+
+#[tokio::test]
+async fn a_provider_that_cycles_between_two_cursors_is_stopped() {
+    // Cursor a -> b -> a -> b ... never repeats consecutively, so an
+    // "unchanged cursor" check alone would spin here forever.
+    let scan = discover_all(&[Arc::new(CyclingProvider) as Arc<dyn ResourceProvider>]).await;
+
+    assert_eq!(
+        scan.failures.len(),
+        1,
+        "a cycling provider must be recorded as exactly one failure"
+    );
+    let f = &scan.failures[0];
+    assert_eq!(f.phase, FailurePhase::NoProgress);
+    assert_eq!(f.code, ErrorCode::CORE_INVALID);
+    assert!(f.message.contains("cannot advance"), "{f:?}");
+    assert!(
+        !scan.is_complete(),
+        "a stopped scan must not claim to have completed"
+    );
+}
+
+/// A provider whose cursors alternate without ever repeating consecutively.
+struct CyclingProvider;
+
+#[async_trait::async_trait]
+impl ResourceProvider for CyclingProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor {
+            plugin_id: PluginId::derive(&["cycling"]).to_string(),
+            version: "0.0.0-mock".into(),
+            kind: sandtree_sdk::manifest::PluginKind::Provider,
+        }
+    }
+    async fn health(&self) -> Result<ProviderHealth, DomainError> {
+        Ok(ProviderHealth::Healthy)
+    }
+    async fn discover(&self, cursor: Option<String>) -> Result<DiscoverBatch, DomainError> {
+        let next = match cursor.as_deref() {
+            None | Some("page:b") => "page:a",
+            _ => "page:b",
+        };
+        Ok(DiscoverBatch {
+            resources: Vec::new(),
+            relations: Vec::new(),
+            cursor: Some(next.into()),
+        })
+    }
+    async fn inspect(&self, _id: &ResourceId) -> Result<ResourceNode, DomainError> {
+        Err(DomainError::not_found("cycling provider has no resources"))
+    }
+    async fn invoke(
+        &self,
+        _req: &OperationRequest,
+    ) -> Result<sandtree_model::operation::OperationOutcome, DomainError> {
+        Err(DomainError::core_invalid("cycling provider runs nothing"))
+    }
+    async fn shutdown(&self) {}
+}
+
 // --- determinism -------------------------------------------------------------
 
 #[tokio::test]
@@ -45,7 +144,9 @@ async fn discover_all_is_byte_identical_no_matter_what_was_invoked_first() {
     let exec = instance.exec.expect("exec port");
 
     let scan = |_: ()| async {
-        discover_all(std::slice::from_ref(&resource)).await.to_json()
+        discover_all(std::slice::from_ref(&resource))
+            .await
+            .to_json()
     };
 
     // Baseline, taken before anything else happens.
@@ -74,11 +175,23 @@ async fn discover_all_is_byte_identical_no_matter_what_was_invoked_first() {
 
     let writable = workspace_uri(&web(), "written.txt").expect("uri");
     files.write(&writable, b"determinism").await.expect("write");
-    let _ = files.read(&writable, ReadWindow { offset: 0, length: 64 }).await;
+    let _ = files
+        .read(
+            &writable,
+            ReadWindow {
+                offset: 0,
+                length: 64,
+            },
+        )
+        .await;
     let _ = files.list(&workspace_uri(&web(), "").unwrap()).await;
 
     let _ = exec
-        .exec(&web(), &["cat".to_string(), "/etc/hostname".to_string()], 5_000)
+        .exec(
+            &web(),
+            &["cat".to_string(), "/etc/hostname".to_string()],
+            5_000,
+        )
         .await;
 
     assert_eq!(
@@ -139,8 +252,8 @@ async fn a_fresh_scan_reproduces_the_fixture_exactly() {
 
 #[tokio::test]
 async fn a_provider_that_fails_mid_scan_keeps_its_earlier_pages() {
-    let broken = ScriptedWorld::from_json_str(fixtures::MID_PAGE_FAILURE_WORLD)
-        .expect("world loads");
+    let broken =
+        ScriptedWorld::from_json_str(fixtures::MID_PAGE_FAILURE_WORLD).expect("world loads");
     let healthy_count = world().resources().len();
     let scan = discover_all(&[as_port(broken), as_port(world())]).await;
 
@@ -222,7 +335,10 @@ impl ResourceProvider for StuckProvider {
     async fn inspect(&self, _id: &ResourceId) -> Result<ResourceNode, DomainError> {
         Err(DomainError::not_found("stuck provider has no resources"))
     }
-    async fn invoke(&self, _req: &OperationRequest) -> Result<sandtree_model::operation::OperationOutcome, DomainError> {
+    async fn invoke(
+        &self,
+        _req: &OperationRequest,
+    ) -> Result<sandtree_model::operation::OperationOutcome, DomainError> {
         Err(DomainError::core_invalid("stuck provider runs nothing"))
     }
     async fn shutdown(&self) {}

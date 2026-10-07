@@ -138,18 +138,12 @@ fn a_dangling_parent_and_a_parent_cycle_are_both_refused() {
           {"key":"b","id_parts":["b"],"kind":"container","name":"b","state":"running",
            "parent":"a","last_seen":"2026-10-07T00:00:00Z"}
         ]}"#;
-    assert!(
-        rejection(cycle).contains("cycle"),
-        "{}",
-        rejection(cycle)
-    );
+    assert!(rejection(cycle).contains("cycle"), "{}", rejection(cycle));
 }
 
 #[test]
 fn relations_must_name_declared_resources() {
-    let raw = minimal(
-        r#", "relations": [{"from": "a", "to": "ghost", "kind": "uses-image"}]"#,
-    );
+    let raw = minimal(r#", "relations": [{"from": "a", "to": "ghost", "kind": "uses-image"}]"#);
     match load(&raw).unwrap_err() {
         FixtureError::Invalid { field, .. } => assert_eq!(field, "relations[].to=ghost"),
         other => panic!("expected an unknown-key rejection, got {other:?}"),
@@ -158,18 +152,15 @@ fn relations_must_name_declared_resources() {
 
 #[test]
 fn operation_outcomes_must_be_terminal_and_carry_codes_only_on_failure() {
-    let pending = minimal(
-        r#", "operations": [{"op": "start", "outcome": {"state": "running"}}]"#,
-    );
+    let pending = minimal(r#", "operations": [{"op": "start", "outcome": {"state": "running"}}]"#);
     assert!(
         rejection(&pending).contains("not terminal"),
         "{}",
         rejection(&pending)
     );
 
-    let failed_without_code = minimal(
-        r#", "operations": [{"op": "start", "outcome": {"state": "failed"}}]"#,
-    );
+    let failed_without_code =
+        minimal(r#", "operations": [{"op": "start", "outcome": {"state": "failed"}}]"#);
     assert!(
         rejection(&failed_without_code).contains("must carry a stable code"),
         "{}",
@@ -193,9 +184,8 @@ fn operation_outcomes_must_be_terminal_and_carry_codes_only_on_failure() {
         rejection(&neither)
     );
 
-    let unknown_op = minimal(
-        r#", "operations": [{"op": "frobnicate", "outcome": {"state": "succeeded"}}]"#,
-    );
+    let unknown_op =
+        minimal(r#", "operations": [{"op": "frobnicate", "outcome": {"state": "succeeded"}}]"#);
     assert!(
         rejection(&unknown_op).contains("not an OperationKind"),
         "{}",
@@ -210,7 +200,10 @@ fn error_codes_must_exist_in_the_shipped_registry() {
              "error": {"code": "ST-INVENTED-999", "message": "nope"}}]"#,
     );
     assert!(
-        matches!(load(&raw).unwrap_err(), FixtureError::UnknownErrorCode { .. }),
+        matches!(
+            load(&raw).unwrap_err(),
+            FixtureError::UnknownErrorCode { .. }
+        ),
         "{}",
         rejection(&raw)
     );
@@ -218,9 +211,7 @@ fn error_codes_must_exist_in_the_shipped_registry() {
 
 #[test]
 fn file_entries_must_declare_a_real_parent_directory() {
-    let orphan = minimal(
-        r#", "files": [{"root": "a", "path": "src/main.rs", "content": "x"}]"#,
-    );
+    let orphan = minimal(r#", "files": [{"root": "a", "path": "src/main.rs", "content": "x"}]"#);
     assert!(
         rejection(&orphan).contains("parent directory"),
         "{}",
@@ -237,9 +228,7 @@ fn file_entries_must_declare_a_real_parent_directory() {
         rejection(&parent_is_a_file)
     );
 
-    let unknown_root = minimal(
-        r#", "files": [{"root": "ghost", "path": "", "is_dir": true}]"#,
-    );
+    let unknown_root = minimal(r#", "files": [{"root": "ghost", "path": "", "is_dir": true}]"#);
     assert!(
         rejection(&unknown_root).contains("files[].root=ghost"),
         "{}",
@@ -269,9 +258,8 @@ fn contradictory_file_declarations_are_refused() {
         rejection(&size_mismatch)
     );
 
-    let dir_with_content = minimal(
-        r#", "files": [{"root": "a", "path": "", "is_dir": true, "content": "nope"}]"#,
-    );
+    let dir_with_content =
+        minimal(r#", "files": [{"root": "a", "path": "", "is_dir": true, "content": "nope"}]"#);
     assert!(
         rejection(&dir_with_content).contains("a directory cannot declare content"),
         "{}",
@@ -309,9 +297,7 @@ fn an_exec_rule_must_declare_an_argv_and_a_known_resource() {
         rejection(&empty_argv)
     );
 
-    let unknown_resource = minimal(
-        r#", "exec": [{"resource": "ghost", "argv": ["ls"]}]"#,
-    );
+    let unknown_resource = minimal(r#", "exec": [{"resource": "ghost", "argv": ["ls"]}]"#);
     assert!(
         rejection(&unknown_resource).contains("exec[].resource=ghost"),
         "{}",
@@ -527,7 +513,10 @@ fn an_unavailable_provider_without_a_scripted_code_still_fails_closed() {
 fn an_undeclared_resource_is_reachable_by_no_rule_at_all() {
     let w = world();
     let ghost = ResourceId::derive(&["never-declared"]);
-    assert!(w.node(&ghost).is_none(), "no node for an undeclared resource");
+    assert!(
+        w.node(&ghost).is_none(),
+        "no node for an undeclared resource"
+    );
     assert!(
         !w.exec_rules()
             .iter()
@@ -696,10 +685,9 @@ fn resource_metadata_and_capabilities_survive_loading() {
         CapabilityNamespace::Resource,
         "destroy"
     )));
-    assert!(!n.capabilities.allows(&Capability::global(
-        CapabilityNamespace::Resource,
-        "pause"
-    )));
+    assert!(!n
+        .capabilities
+        .allows(&Capability::global(CapabilityNamespace::Resource, "pause")));
     assert_eq!(n.meta_str("endpoint_id"), Some("ep-docker-engine"));
     assert_eq!(n.last_seen, "2026-10-07T00:00:00Z");
 }
@@ -733,7 +721,9 @@ fn exec_rules_match_exact_argv_and_may_be_scoped_to_a_resource() {
     assert!(err.message.contains("no scripted exec rule"), "{err}");
 
     // An unscoped rule answers anywhere.
-    let out = w.exec(&cache, &["false".to_string()], 1_000).expect("unscoped rule");
+    let out = w
+        .exec(&cache, &["false".to_string()], 1_000)
+        .expect("unscoped rule");
     assert_eq!(out.exit_code, 1);
     assert_eq!(out.stderr, "scripted failure");
 }
@@ -831,7 +821,8 @@ fn a_symlink_inside_the_subtree_resolves_to_its_target() {
     let fs = w.filesystem(&box_id()).expect("workspace");
     let path = WorkspacePath::from_relative("workspace/inside").expect("canonical");
     assert_eq!(
-        fs.resolve_confined(&path).expect("an in-subtree link resolves"),
+        fs.resolve_confined(&path)
+            .expect("an in-subtree link resolves"),
         "workspace/app/ok.txt"
     );
 }
@@ -844,7 +835,9 @@ fn a_symlink_loop_is_refused_rather_than_followed_forever() {
                        {"root": "a", "path": "tail", "symlink_target": "loop"}]"#,
     );
     let w = load(&raw).expect("loads");
-    let fs = w.filesystem(&ResourceId::derive(&["a"])).expect("workspace");
+    let fs = w
+        .filesystem(&ResourceId::derive(&["a"]))
+        .expect("workspace");
     let path = WorkspacePath::from_relative("tail").expect("canonical");
     let err = fs.resolve_confined(&path).unwrap_err();
     assert!(err.message.contains("symlink chain"), "{err}");

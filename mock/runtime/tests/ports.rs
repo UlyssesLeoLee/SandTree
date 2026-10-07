@@ -7,16 +7,14 @@
 use sandtree_model::error::ErrorCode;
 use sandtree_model::id::ResourceId;
 use sandtree_model::operation::{OperationKind, OperationRequest, OperationState};
-use sandtree_model::resource::{Correlation, ResourceKind, ResourceState};
+use sandtree_model::resource::{Correlation, ResourceKind, ResourceNode, ResourceState};
 use sandtree_observation_model::ContentHashState;
 use sandtree_sdk::ports::{ProviderHealth, ResourceProvider};
 use sandtree_vfs::ReadWindow;
 use serde_json::json;
 
 use sandtree_mock_runtime::file_provider::workspace_uri;
-use sandtree_mock_runtime::{
-    fixtures, resource_provider::ScriptedResourceProvider, ScriptedWorld,
-};
+use sandtree_mock_runtime::{fixtures, resource_provider::ScriptedResourceProvider, ScriptedWorld};
 
 fn world() -> ScriptedWorld {
     ScriptedWorld::from_json_str(fixtures::DOCKER_WORLD).expect("the built-in docker world loads")
@@ -34,7 +32,6 @@ fn box_id() -> ResourceId {
     ResourceId::derive(&["box"])
 }
 
-
 fn window(offset: u64, length: u64) -> ReadWindow {
     ReadWindow { offset, length }
 }
@@ -45,29 +42,77 @@ fn window(offset: u64, length: u64) -> ReadWindow {
 async fn discover_pages_until_the_cursor_runs_out() {
     let p = port();
     let mut cursor = None;
-    let mut names: Vec<String> = Vec::new();
+    let mut delivered: Vec<ResourceNode> = Vec::new();
+    let mut pages = 0usize;
     loop {
         let page = p.discover(cursor).await.expect("page");
-        names.extend(page.resources.iter().map(|r| r.name.clone()));
+        pages += 1;
+        delivered.extend(page.resources.iter().cloned());
         match page.cursor {
             Some(c) => cursor = Some(c),
             None => break,
         }
     }
+    assert_eq!(pages, 2, "five resources at three per page is two pages");
+    assert_eq!(
+        delivered.len(),
+        5,
+        "every resource is delivered exactly once across the pages"
+    );
+
+    // The load-time rule is pre-order with siblings ordered by derived id, so
+    // the order is checked as that rule rather than as a hardcoded name list:
+    // a name list would have to be rewritten every time an id derivation
+    // changes, and the rule is the part worth protecting.
+    let mut names: Vec<&str> = delivered.iter().map(|r| r.name.as_str()).collect();
+    names.sort_unstable();
     assert_eq!(
         names,
-        vec![
-            "docker-engine",
-            "cache",
-            "web",
-            "bridge",
-            "nginx:latest"
-        ]
+        vec!["bridge", "cache", "docker-engine", "nginx:latest", "web"],
+        "every resource in the world, once each"
     );
+
+    let position = |name: &str| -> usize {
+        delivered
+            .iter()
+            .position(|r| r.name == name)
+            .unwrap_or_else(|| panic!("{name} was delivered"))
+    };
+    for node in &delivered {
+        if let Some(parent) = &node.parent_id {
+            let parent_name = delivered
+                .iter()
+                .find(|r| &r.id == parent)
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|| panic!("{} has a parent that was not delivered", node.name));
+            assert!(
+                position(&parent_name) < position(&node.name),
+                "pre-order puts {parent_name} before {}, got {:?}",
+                node.name,
+                names
+            );
+        }
+    }
+    // `bridge` is a root, so nothing may follow it that belongs to the engine's
+    // subtree only because of a hash collision in the sibling ordering.
+    assert_eq!(position("docker-engine"), 0, "the root comes first");
+
     // A second scan of a quiescent provider must repeat it exactly.
     let again = p.discover(None).await.expect("first page again");
     assert_eq!(again.resources.len(), 3);
     assert_eq!(again.cursor.as_deref(), Some("page:1"));
+    assert_eq!(
+        again
+            .resources
+            .iter()
+            .map(|r| r.name.clone())
+            .collect::<Vec<_>>(),
+        delivered[..3]
+            .iter()
+            .map(|r| r.name.clone())
+            .collect::<Vec<_>>(),
+        "a fresh scan starts from the same first page"
+    );
 }
 
 #[tokio::test]
@@ -97,7 +142,10 @@ async fn health_reports_the_state_rather_than_failing_on_it() {
         sandtree_mock_runtime::WorldFixture::from_json_str(fixtures::UNAVAILABLE_WORLD).unwrap(),
     )
     .expect("world loads");
-    let reported = down.health().await.expect("health reports, it does not raise");
+    let reported = down
+        .health()
+        .await
+        .expect("health reports, it does not raise");
     assert!(!reported.control_is_available(), "{reported:?}");
     assert_eq!(reported.summary(), "unavailable");
     assert!(
@@ -119,7 +167,10 @@ async fn shutdown_is_idempotent_and_leaves_discovery_untouched() {
         "every call is accepted; idempotence means no extra effect, not no call"
     );
     let after = p.discover(None).await.expect("page").resources;
-    assert_eq!(before, after, "shutdown must not change what the world reports");
+    assert_eq!(
+        before, after,
+        "shutdown must not change what the world reports"
+    );
 }
 
 // --- FileProvider: metadata discipline (FR-077) -----------------------------
@@ -133,7 +184,11 @@ async fn list_returns_one_level_of_metadata_and_never_a_body() {
     let root = workspace_uri(&web(), "").expect("root uri");
     let entries = files.list(&root).await.expect("root lists");
     let paths: Vec<&str> = entries.iter().map(|e| e.path.as_str()).collect();
-    assert_eq!(paths, vec!["build.log", "etc", "src"], "path order is fixed");
+    assert_eq!(
+        paths,
+        vec!["build.log", "etc", "src"],
+        "path order is fixed"
+    );
 
     let serialized = serde_json::to_string(&entries).expect("metadata serializes");
     assert!(
@@ -240,7 +295,7 @@ async fn a_write_is_visible_to_a_later_read_and_stat() {
     assert_eq!(meta.mtime_ns, None, "a fake must not invent a timestamp");
     assert_eq!(
         meta.hash_state,
-        ContentHashState::MetadataKnown,
+        ContentHashState::UnknownHash,
         "the body changed, so no digest may still be advertised"
     );
 }
@@ -276,14 +331,24 @@ async fn a_write_follows_a_symlink_to_its_resolved_target() {
     // `workspace/inside` resolves to `workspace/app/ok.txt`, so the write must
     // land there and leave no link behind.
     let w = ScriptedWorld::from_json_str(fixtures::ESCAPING_SYMLINK_WORLD).expect("world loads");
-    let files = w.into_shared().provider_instance().files.expect("file port");
+    let files = w
+        .into_shared()
+        .provider_instance()
+        .files
+        .expect("file port");
 
     let link = workspace_uri(&box_id(), "workspace/inside").expect("uri");
-    files.write(&link, b"rewritten").await.expect("write through link");
+    files
+        .write(&link, b"rewritten")
+        .await
+        .expect("write through link");
 
     let target = workspace_uri(&box_id(), "workspace/app/ok.txt").expect("uri");
     assert_eq!(
-        files.read(&target, window(0, 64)).await.expect("target changed"),
+        files
+            .read(&target, window(0, 64))
+            .await
+            .expect("target changed"),
         b"rewritten".to_vec()
     );
 }
@@ -291,7 +356,11 @@ async fn a_write_follows_a_symlink_to_its_resolved_target() {
 #[tokio::test]
 async fn a_write_through_an_escaping_symlink_is_refused_and_writes_nothing() {
     let w = ScriptedWorld::from_json_str(fixtures::ESCAPING_SYMLINK_WORLD).expect("world loads");
-    let files = w.into_shared().provider_instance().files.expect("file port");
+    let files = w
+        .into_shared()
+        .provider_instance()
+        .files
+        .expect("file port");
 
     let escape = workspace_uri(&box_id(), "workspace/out/key.pem").expect("uri");
     let err = files.write(&escape, b"overwritten").await.unwrap_err();
@@ -321,7 +390,11 @@ async fn a_caller_cannot_express_a_traversal_at_all() {
 #[tokio::test]
 async fn every_file_call_on_an_unavailable_provider_fails() {
     let w = ScriptedWorld::from_json_str(fixtures::UNAVAILABLE_WORLD).expect("world loads");
-    let files = w.into_shared().provider_instance().files.expect("file port");
+    let files = w
+        .into_shared()
+        .provider_instance()
+        .files
+        .expect("file port");
     let id = ResourceId::derive(&["mock-vm"]);
     let uri = workspace_uri(&id, "anything").expect("uri");
     for code in [
@@ -342,7 +415,11 @@ async fn exec_returns_the_scripted_outcome() {
     let exec = w.into_shared().provider_instance().exec.expect("exec port");
 
     let out = exec
-        .exec(&web(), &["cat".to_string(), "/etc/hostname".to_string()], 5_000)
+        .exec(
+            &web(),
+            &["cat".to_string(), "/etc/hostname".to_string()],
+            5_000,
+        )
         .await
         .expect("scripted command");
     assert_eq!(out.stdout, "web\n");
@@ -356,13 +433,16 @@ async fn exec_output_longer_than_the_cap_comes_back_truncated() {
     let exec = w.into_shared().provider_instance().exec.expect("exec port");
     let id = ResourceId::derive(&["noisy"]);
 
-    let out = exec.exec(&id, &["yes".to_string()], 5_000).await.expect("runs");
+    let out = exec
+        .exec(&id, &["yes".to_string()], 5_000)
+        .await
+        .expect("runs");
     assert!(out.truncated);
     assert_eq!(out.stdout.len(), sandtree_mock_runtime::MAX_CAPTURE_BYTES);
-    assert_ne!(
-        out.stdout.len(),
-        fixtures::LARGE_OUTPUT_WORLD.len(),
-        "the cap, not the fixture length, decided the output"
+    assert!(
+        fixtures::LARGE_OUTPUT_WORLD.len() > sandtree_mock_runtime::MAX_CAPTURE_BYTES,
+        "the fixture must really declare more output than the cap allows, or \
+         this test would pass without the cap doing anything"
     );
 }
 
@@ -387,7 +467,11 @@ async fn exec_on_an_unknown_resource_is_not_found() {
     let w = ScriptedWorld::from_json_str(fixtures::DOCKER_WORLD).expect("world loads");
     let exec = w.into_shared().provider_instance().exec.expect("exec port");
     let err = exec
-        .exec(&ResourceId::derive(&["ghost"]), &["false".to_string()], 1_000)
+        .exec(
+            &ResourceId::derive(&["ghost"]),
+            &["false".to_string()],
+            1_000,
+        )
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::VFS_NOT_FOUND, "{err}");

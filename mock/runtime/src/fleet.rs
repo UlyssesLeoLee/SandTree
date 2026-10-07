@@ -14,12 +14,21 @@
 //!
 //! # Why the loop cannot hang
 //!
-//! A provider that returns a cursor it was just handed makes no progress. Left
-//! alone that is an infinite loop, so the scan records a
-//! [`FailurePhase::NoProgress`] failure and stops paging that provider. The
-//! progress check is a property of the *caller*, which is why it lives here and
-//! not in [`sandtree_sdk::ports::ResourceProvider`].
+//! A paginated scan has exactly three ways out, and all three are checked here:
+//!
+//! 1. the provider answers with no cursor — the chain is exhausted (FR-001);
+//! 2. the provider hands back the cursor it was just given, so it cannot
+//!    advance;
+//! 3. the provider hands back a cursor this scan already followed, so it is
+//!    cycling over pages it has already delivered.
+//!
+//! Cases 2 and 3 record a [`FailurePhase::NoProgress`] failure and stop paging
+//! that provider. Without case 1 the loop would restart at page zero forever,
+//! because `None` is also the cursor the scan begins with. The progress checks
+//! are a property of the *caller*, which is why they live here and not in
+//! [`sandtree_sdk::ports::ResourceProvider`].
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use sandtree_model::error::ErrorCode;
@@ -157,11 +166,24 @@ pub async fn discover_all(providers: &[Arc<dyn ResourceProvider>]) -> FleetDisco
 
         let mut pages: Vec<DiscoverBatch> = Vec::new();
         let mut cursor: Option<String> = None;
+        // Every non-terminal cursor this scan has already followed. A provider
+        // that hands one back again is cycling over pages it has delivered,
+        // which is no more progress than an unchanged cursor.
+        let mut followed: BTreeSet<String> = BTreeSet::new();
         loop {
             match provider.discover(cursor.clone()).await {
                 Ok(batch) => {
                     let next = batch.cursor.clone();
-                    if next == cursor {
+                    // FR-001: no cursor is how a provider says its chain is
+                    // exhausted. This is checked first, and it is what makes the
+                    // loop terminate at all -- `None` is also the cursor the
+                    // scan starts from, so falling through would restart the
+                    // chain at page zero and page forever.
+                    let Some(next_cursor) = next else {
+                        pages.push(batch);
+                        break;
+                    };
+                    if Some(&next_cursor) == cursor.as_ref() {
                         // No progress: stop rather than spin forever.
                         failures.push(failure(
                             &plugin_id,
@@ -170,12 +192,25 @@ pub async fn discover_all(providers: &[Arc<dyn ResourceProvider>]) -> FleetDisco
                             pages.len(),
                             ErrorCode::CORE_INVALID,
                             format!(
-                                "provider returned cursor {next:?} unchanged; the scan cannot advance"
+                                "provider returned cursor {next_cursor:?} unchanged; the scan cannot advance"
                             ),
                         ));
                         break;
                     }
-                    cursor = next;
+                    if !followed.insert(next_cursor.clone()) {
+                        failures.push(failure(
+                            &plugin_id,
+                            FailurePhase::NoProgress,
+                            pages.len(),
+                            pages.len(),
+                            ErrorCode::CORE_INVALID,
+                            format!(
+                                "provider cycled back to cursor {next_cursor:?}; the scan cannot advance"
+                            ),
+                        ));
+                        break;
+                    }
+                    cursor = Some(next_cursor);
                     pages.push(batch);
                 }
                 Err(e) => {
