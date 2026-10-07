@@ -477,15 +477,33 @@ mod tests {
     }
 
     #[test]
-    fn relation_kind_accepts_hyphen_form_and_rejects_rubbish() {
-        let rel: RelationSpec =
+    fn relation_kind_accepts_both_spellings_and_rejects_rubbish() {
+        // The module docs promise that both the wire spelling and the serde
+        // spelling are accepted for every enum field; `uses_image` used to be
+        // asserted as a rejection here, which contradicted both the docs and
+        // `de_relation_kind`, and made the fixture schema depend on which half
+        // of it you read.
+        let hyphen: RelationSpec =
             serde_json::from_str(r#"{"from":"a","to":"b","kind":"uses-image"}"#)
                 .expect("hyphen form");
-        assert_eq!(rel.kind, RelationKind::UsesImage);
-        let bad =
-            serde_json::from_str::<RelationSpec>(r#"{"from":"a","to":"b","kind":"uses_image"}"#)
-                .unwrap_err();
-        assert!(bad.to_string().contains("unknown relation kind"), "{bad}");
+        let underscore: RelationSpec =
+            serde_json::from_str(r#"{"from":"a","to":"b","kind":"uses_image"}"#)
+                .expect("underscore form");
+        assert_eq!(hyphen.kind, RelationKind::UsesImage);
+        assert_eq!(underscore.kind, RelationKind::UsesImage);
+        assert_eq!(hyphen, underscore);
+
+        // A genuinely unknown kind is still refused rather than defaulted.
+        for bad in ["uses_imag", "USES-IMAGE", "", "uses image"] {
+            let err = serde_json::from_str::<RelationSpec>(&format!(
+                r#"{{"from":"a","to":"b","kind":"{bad}"}}"#
+            ))
+            .unwrap_err();
+            assert!(
+                err.to_string().contains("unknown relation kind"),
+                "{bad:?} produced {err}"
+            );
+        }
     }
 
     #[test]

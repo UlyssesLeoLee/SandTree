@@ -100,7 +100,7 @@ pub const DOCKER_WORLD: &str = r#"
     {"root": "web", "path": "src", "is_dir": true},
     {"root": "web", "path": "src/index.html", "content": "<h1>hello</h1>", "mtime_ns": 1},
     {"root": "web", "path": "etc", "is_dir": true, "read_only": true},
-    {"root": "web", "path": "etc/app.conf", "content": "port=8080", "size": 10, "mtime_ns": 2},
+    {"root": "web", "path": "etc/app.conf", "content": "port=8080", "mtime_ns": 2},
     {"root": "web", "path": "build.log", "size": 4096, "mtime_ns": 3}
   ],
   "exec": [
