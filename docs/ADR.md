@@ -240,3 +240,104 @@ provider 的 pre-order，**第 0 页的一条关系完全可以指向第 1 页�
 **回归门禁**　`tests/integration/tests/discovery.rs::relations_that_span_a_page_boundary_are_still_written`，
 用例先断言 fixture 确实分页且确实存在跨页关系（否则测试会证明不了任何东西），
 再断言两端资源与关系本身都在库里、且资源数精确为 5。
+
+---
+
+## ADR-015 网络取回通道（git remote / MCP endpoint）——新增 optional provider plugin
+
+**背景与方向**。沙盒内部有一类内容无法安全穿透取得：runtime 没有 read API，
+没有 exec 通道，而要打通另一条路就要交出宿主 Docker socket、全盘可写映射或宿主管理员 token——
+NFR-S06/S07 明确禁止。对这部分内容，沙盒可以选择**主动发布**一个通道（git remote / MCP endpoint），
+让宿主去网络取。本 ADR 把这种能力落到两个新增 optional provider plugin 上，并先定下它们不能造成的安全回退。
+
+**为什么不能复用基线的 FR-O02**。基线 `FR-O02`（01_需求定义:328-332）的 MCP Adapter 是**向外**方向：
+把 SandTree 的操作暴露**给**兼容 Agent，且明写“MCP 不属于 Kernel 内部协议或必需依赖”。
+本次需求是**向内**方向：沙盒主动挂出端点，SandTree 去取。两者不共用代码也不共用协议面，
+语义相反，不能复用。基线 `03_系统架构设计:62,115` 已给 `optional/{git-gix, integration-mcp}` 留位，
+本 ADR 就落在那两个位置上，但中的 git 定位是“optional workspace metadata”，与此处的“经网络取沙盒内资产”不是一件事。
+
+**决定 1：落点是新增 optional provider plugin，不动冻结 schema**。两个 crate：
+`plugins/provider-git-remote`、`plugins/provider-mcp-remote`。它们走既有的 `ObservationProvider` 端口产出标准
+`ObservationSnapshot`，因此 `schemas/001_init.sql`、`observation_snapshot_v1.schema.json`、全部 WIT 一字未动。
+
+**决定 2：准入规则落在 `crates/policy/src/acquire.rs`，且无传输依赖**。规则是纯函数，
+可以不开网络就测，并且两个 provider 被迫走同一道门。规则只有一条，但是两个方向：
+
+- **穿透被拒绝时**，网络取回才成立。
+- **穿透可行时**，网络取回必须被拒绝。
+
+第二个方向才是重点。只写前一半的话，沙盒就能自己挑选更弱的观测方式：
+把宿主的自己的 read API 藏在连可达范围外，让穿透看起来不可用，然后让每一个关于自己的事实
+由一个自己控制的进程送达。**网络通道是不可达内容的兜底，不是一个更方便的选择**。
+
+**决定 3：信任上限锁 `GuestProbe`，且是类型属性而不是配置项**。
+`AcquisitionPolicy` 是**无字段**单元结构，`NETWORK_TRUST_CEILING` 是 `const`，`AcquisitionPermit` 的字段私有且只能由
+`AcquisitionPolicy::authorize` 产出。因此“把信任提高”不是一个需要记得住的约定，而是没有任何代码路径可以达到的状态。
+
+**决定 4：git 提供 integrity，不提供 authenticity**。对象 ID 是内容寻址的，所以同一份字节以后可以重新核对。
+这就是 `Provenance::evidence_hash` 的用途。但沙盒可以为自己的假陈述算出一个合法对象 ID，
+所以信任档位不动——严格遵循 ADR-OBS-003。`evidence_hash` 绑定**全部** ref/工具清单，
+而不只是 HEAD；只哈 HEAD 的实现会在沙盒改写其他分支时仍然“校验通过”。
+
+**决定 5：不用 gix/gitoxide，自实 git ref advertisement**。基线把 `gix/gitoxide` 列为 OPTIONAL git 技术，但：
+
+- 本机离线仓储里 `gix` 所有版本都解析失败（`prodash -> human_format` 缺包），强行引入会打断整个 `--offline` 门禁；
+- 本通道需要的原语只有一个：`info/refs` 的 pkt-line ref advertisement，约百行，而且**不需要 git 可执行斄体就能测**；
+- `git2` 需要在构建时编译 libgit2（C + cmake），用以读一份 ref 清单不等价。
+
+实测结果记录在本 ADR 的「强行不可行的方案」一节。
+
+**决定 6：MCP provider 只调 `initialize` + `tools/list`，绝不调 `tools/call`**。
+调一个工具是执行沙盒选定的代码、带沙盒选定的参数，把返回值当成观测结果。
+这使被观测者反过来操作观测者，并且这条路径的副作用是 observation 平面无法推理的——
+它正好是 NFR-S06 把 guest probe bootstrap 限定为只读所防住的那种形状。
+
+### 强行不可行的方案（实测记录）
+
+- `gix 0.66 / 0.73 / 0.84`：三个版本在本机离线解析均失败，均为
+  `no matching package named human_format` （`prodash 28/30` 的依赖，本机缓存无此包）。
+- `git2 0.21` + `libgit2-sys`：需构建 libgit2 C 代码，且依赖 cmake / cc 链。
+- `reqwest`：需拉 TLS 栈且与 hyper 重复；最终采用 `hyper` + `hyper-rustls`，原因是 `Cargo.lock` 已有 hyper。
+- **TLS 确认可行**：`hyper-rustls 0.27` + `rustls-native-certs`（系统信任库）+ `ring`（不用 `aws-lc-rs`，后者需 cmake），
+  全部在本机离线缓存内并成功编译。证书验证**6号一起**：没有关闭验证的后门。
+- `ring` 许可为 `Apache-2.0 AND ISC`，两项均在 `schemas/deny.toml` 白名单内，`scripts/license_gate.py` 实测 PASS。
+
+### 交叉验证：端到端，真实 socket
+
+两个 provider 各自带一个 `tests/e2e.rs`，起真实 loopback HTTP 服务器，走生产代码的
+`HyperTransport` -> pkt-line/JSON-RPC 解析 -> 快照装配全路径。唯一替换的是 TLS 连接器的**目标地址**。
+
+git 端的服务器返回的是按 git-http-backend 真实形状组装的 pkt-line 报文；
+MCP 端的服务器是一个真实的 MCP 实现——按 `id` 关联、赋予 session、按 `Accept` 协商返回 JSON。
+
+**这些测试真的抓到了东西**：
+
+1. **MCP session 从未回显**。手工单元测试全绿，但端到端断言 `tools/list` 必须携带手握手时
+   分配的 `Mcp-Session-Id`。原因：`call()` 只返回解析后的 JSON-RPC `Response`，把 HTTP 响应头里的
+   session 丢了，`probe()` 里硬编码为 `None`。它在一个宽容 session 的服务器上看不出任何问题，
+   只是在严格的服务器上才显形。
+2. **URL path 里的空格未被拒**。`https://host/repo.git --upload-pack=touch /tmp/pwn` 能过入之前的校验。
+   `git clone` 会把 path 之后的一切当选项，这就是戴着 URL 皮的远程命令执行。现在在解析阶段就拒，
+   并拥有一条专门的反证测试。
+
+**门禁没有发现的事**（写清以免误认为已覆盖）：端到端测试只覆盖 loopback 上的
+`http://`；`https://` 路径有 TLS 可链但**没有对真实证书算法做过验证**。
+
+### 已知缺口（明确写出，不装作已完成）
+
+- **git 协议 v2 不支持**。客户端不发 `Git-Protocol: version=2`，符合规范的服务器因此回 v0 advertisement；
+  若服务器仍回 v2，报 `ProtocolVersion2Unsupported`，而**不是**报“0 个 ref”。
+- **不拉 packfile，不读文件内容**。只有 advertisement。通道能学到工作区的形状，拿不到文件内容。
+- **不调 MCP 工具**。见上。
+- **网络取回尚未接入 kernel 的协调子（strategy selection）**。两个 provider 已完整实现 `ObservationProvider`，
+  但 `crates/observation-core` 尚未在拒绝穿透时回退到它们。这是本次交付的**最大缺口**：
+  在接上之前，这两个 plugin 只能被直接注入并调用。
+- **`PenetrationVerdict` 由调用方注册**。provider 自身不会去推导穿透可能性，禁用时默认拒绝。
+- **没有 UI 层**，命令行也没有接入端点注册。
+
+**反证测试**：`crates/policy/src/acquire.rs` 的 48 条测试 + 三次真实变异验证。
+变异【穿透可行不再拒绝】-> `a_working_penetration_channel_makes_the_network_channel_inadmissible` 变红；
+变异【信任上限提到 provider_native】-> 两条 ceiling 测试变红；
+变异【删掉 verdict 的域绑定】-> `a_verdict_judged_for_another_domain_is_not_accepted` 变红。
+
+**当前测试规模**：`acquire` 48 条 + git-remote 72 条（63 单测 + 9 端到端）+ mcp-remote 55 条（48 单测 + 7 端到端）= 175 条新增。

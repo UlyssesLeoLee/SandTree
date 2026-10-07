@@ -42,6 +42,7 @@ SandTree v1.1：Sandbox & Docker Control Plane（Windows 11 x64 baseline）。
 crates/{model,kernel,resource-graph,plugin-host,policy,event,store,vfs,ipc,sdk}
 crates/{observation-model,observation-core}      # v1.1 增量
 plugins/{provider-docker,provider-multipass,provider-windows-sandbox,provider-docker-sandbox,feature-compose}
+plugins/{provider-git-remote,provider-mcp-remote}   # 向内网络取回（ADR-015），optional
 apps/{daemon,cli,plugin-worker,probe-windows}
 wit/                                             # ABI 源
 tests/{contract,integration,system}

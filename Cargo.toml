@@ -17,6 +17,8 @@ members = [
     "crates/ipc",
     "plugins/provider-docker",
     "plugins/provider-multipass",
+    "plugins/provider-git-remote",
+    "plugins/provider-mcp-remote",
     "plugins/provider-windows-sandbox",
     "plugins/provider-docker-sandbox",
     "plugins/feature-compose",

@@ -65,7 +65,12 @@ provider（实现 `sdk` ports）：
 | `plugins/provider-multipass` | DD-PLG §9 | `multipass list/info --format json` + `exec`；CLI 缺失 → `Unavailable` 而非空 batch |
 | `plugins/provider-windows-sandbox` | DD-PLG §7 / §12.4 | `.wsb` 解析 + probe envelope 校验；bootstrap 只读、映射限 outbox |
 | `plugins/provider-docker-sandbox` | DD-PLG §8 / §12.2 | 三级降级 API → CLI → fixture；所有 tier 的 trust 均为 `guest_probe` |
+| `plugins/provider-git-remote` | ADR-015（向内取回） | 穿透被拒时经 HTTP 读 `info/refs` ref advertisement；自实现 pkt-line；trust 恒为 `guest_probe`；不拉 packfile |
+| `plugins/provider-mcp-remote` | ADR-015（向内取回） | 穿透被拒时经 JSON-RPC 2.0 / streamable HTTP 读 `initialize` + `tools/list`；**从不调 `tools/call`**；trust 恒为 `guest_probe` |
 | `plugins/feature-compose` | DD-PLG §6 / FR-030..032 | 消费 Docker provider 已有的 label 分组；生命周期经注入的 `ComposeRunner` |
+
+两个网络取回通道共用 `crates/policy::acquire` 的准入规则：**穿透可行时网络取回被拒，穿透被拒时才成立**；
+信任上限是类型属性（无字段 `AcquisitionPolicy` + `const`），不是配置项。详见 `docs/ADR.md` ADR-015。
 
 apps：`daemon`（IPC 服务 + EventPump + `--check` 自检）、`cli`、`plugin-worker`、`probe-windows`。
 

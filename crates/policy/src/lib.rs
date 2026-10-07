@@ -3,11 +3,16 @@
 
 #![deny(missing_docs)]
 
+pub mod acquire;
 pub mod audit;
 pub mod engine;
 pub mod redact;
 pub mod trust;
 
+pub use acquire::{
+    AcquisitionChannel, AcquisitionDenied, AcquisitionPermit, AcquisitionPolicy,
+    AcquisitionRequest, PenetrationVerdict, RefusalReason, NETWORK_TRUST_CEILING,
+};
 pub use audit::{now_ms, AuditRecord};
 pub use engine::{Decision, GrantContext, PolicyEngine};
 pub use redact::{RedactError, Redactor, REDACTED, SECRET_KEY_TOKENS};

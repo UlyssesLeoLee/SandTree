@@ -183,6 +183,22 @@ if ($c -ne 0) { $failures += 'st' }
 $c = Invoke-Gate -Name 'uat' -CargoArgs @('test', '-p', 'sandtree-uat-tests', '--offline')
 if ($c -ne 0) { $failures += 'uat' }
 
+# ADR-015: the two network-acquisition channels carry end-to-end tests that
+# open real loopback sockets and drive the production transport. They live in
+# `tests/e2e.rs`, which the `ut` gate's `--lib` filter does not reach -- and a
+# target no gate runs is indistinguishable from a target that passes. Two gates
+# rather than one, because cargo takes a single `--test` and the evidence
+# matrix is more useful when the two channels are separable.
+$c = Invoke-Gate -Name 'git-channel' -CargoArgs @(
+    'test', '--offline', '-p', 'sandtree-provider-git-remote', '--test', 'e2e'
+)
+if ($c -ne 0) { $failures += 'git-channel' }
+
+$c = Invoke-Gate -Name 'mcp-channel' -CargoArgs @(
+    'test', '--offline', '-p', 'sandtree-provider-mcp-remote', '--test', 'e2e'
+)
+if ($c -ne 0) { $failures += 'mcp-channel' }
+
 # --- coverage self-check -----------------------------------------------------
 # The gate list above is hand-written; the set of tests the workspace actually
 # owns is not. This asks cargo for the second and compares it with the first, so
@@ -200,7 +216,7 @@ $doctests = @($listed | Where-Object { $_ -match '\s-\s' }).Count
 $owned = $listed.Count - $doctests
 
 $executed = 0
-foreach ($gate in @('contract', 'ut', 'mock', 'it', 'st', 'uat')) {
+foreach ($gate in @('contract', 'ut', 'mock', 'it', 'st', 'uat', 'git-channel', 'mcp-channel')) {
     $log = Join-Path $RunDir "$gate.log"
     if (-not (Test-Path $log)) { continue }
     $n = (Select-String -Path $log -Pattern '^test result: ok\. (\d+) passed' |

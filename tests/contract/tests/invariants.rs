@@ -21,7 +21,7 @@
 //! at" are the same output, and only the second one is useless. The thresholds
 //! are the difference, so they are asserted rather than assumed.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 fn repo_root() -> PathBuf {
@@ -125,14 +125,7 @@ fn the_microkernel_crates_reach_no_provider_crate() {
     let manifest = root.join("crates").join("kernel").join("Cargo.toml");
     let deps = declared_dependencies(&manifest);
 
-    let provider_crates: BTreeSet<&str> = [
-        "sandtree-provider-docker",
-        "sandtree-provider-multipass",
-        "sandtree-provider-windows-sandbox",
-        "sandtree-provider-docker-sandbox",
-    ]
-    .into_iter()
-    .collect();
+    let provider_crates = provider_crate_names(&root);
 
     assert!(
         !deps.is_empty(),
@@ -146,6 +139,75 @@ fn the_microkernel_crates_reach_no_provider_crate() {
              provider boundary the microkernel exists to hide"
         );
     }
+}
+
+/// Every provider crate in the workspace, **discovered** from `plugins/`.
+///
+/// This used to be a hand-written list of four names. That list was correct
+/// until a fifth provider was added and nothing noticed: the rule kept
+/// reporting a clean tree while `crates/kernel` could have reached the new
+/// provider and this test would still have passed. The failure mode of a
+/// hand-written input set is that it is indistinguishable from a clean result.
+///
+/// So the set is derived from the tree, and the caller asserts a floor on how
+/// many were found — a walk that finds nothing must be loud.
+///
+/// The map is keyed by **package name** and valued by the crate's source
+/// directory. The two differ (`sandtree-provider-git-remote` lives in
+/// `plugins/provider-git-remote`), and a rule that joins a package name onto
+/// `plugins/` reports "path not found" for a plugin that is present and
+/// working — a false alarm dressed as a real failure.
+fn provider_crate_sources(root: &Path) -> BTreeMap<String, PathBuf> {
+    let mut found = BTreeMap::new();
+    let plugins = root.join("plugins");
+    for entry in std::fs::read_dir(&plugins).unwrap_or_else(|e| panic!("plugins/ is readable: {e}"))
+    {
+        let dir = entry.expect("dir entry").path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let manifest = dir.join("Cargo.toml");
+        if manifest.is_file() {
+            if let Some(name) = package_name(&manifest) {
+                found.insert(name, dir.join("src"));
+            }
+        }
+    }
+    assert!(
+        found.len() >= 6,
+        "only {} provider crates were discovered under plugins/ ({}); a walk \
+         that finds nothing reports the same 'clean' as a real pass",
+        found.len(),
+        found.keys().cloned().collect::<Vec<_>>().join(", ")
+    );
+    found
+}
+
+/// Package names of every provider crate in the workspace.
+fn provider_crate_names(root: &Path) -> BTreeSet<String> {
+    provider_crate_sources(root).into_keys().collect()
+}
+
+/// The `name = "..."` in a manifest's `[package]` table.
+fn package_name(manifest: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(manifest).ok()?;
+    let mut in_package = false;
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') {
+            in_package = line.trim_start_matches('[').trim_end_matches(']') == "package";
+            continue;
+        }
+        if !in_package {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            if key.trim() == "name" {
+                return Some(value.trim().trim_matches('"').to_string());
+            }
+        }
+    }
+    None
 }
 
 /// ADR-010: mock crates are test assets. `tests/*` may use them; `crates/*`
@@ -328,4 +390,133 @@ fn relation_kinds_are_all_representable_in_the_frozen_model() {
     );
     names.sort_unstable();
     assert_eq!(names, sorted, "wire names are snake_case and stable");
+}
+
+// --- UT-044: the network-acquisition gate is not bypassable -----------------
+
+/// ADR-015: both network channels must go through `sandtree-policy`'s admission
+/// gate, and neither may stamp a trust ceiling of its own.
+///
+/// The per-crate tests in `crates/policy` prove the *rule* is correct. They
+/// cannot prove the rule is *reached*: a provider that skips `authorize` and
+/// fetches anyway compiles fine, passes its own tests, and violates the whole
+/// design. That is a repository-shaped fact, so it is asserted here.
+///
+/// Discovered from `plugins/`, not hand-listed: a gate that only checks the two
+/// providers it was written for reports a clean tree the moment a third channel
+/// appears.
+#[test]
+fn every_network_channel_plugin_goes_through_the_acquisition_gate() {
+    /// Plugins that open a network connection. Matched by name, and asserted
+    /// below that at least this many were found.
+    const NETWORK_PLUGINS: [&str; 2] = [
+        "sandtree-provider-git-remote",
+        "sandtree-provider-mcp-remote",
+    ];
+
+    let root = repo_root();
+    let sources = provider_crate_sources(&root);
+
+    let mut checked = 0usize;
+    for name in NETWORK_PLUGINS {
+        let src = sources
+            .get(name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{name} is named as a network channel but was not found \
+                     under plugins/. Either it was renamed or moved, and this \
+                     rule is no longer checking what it was written for."
+                )
+            })
+            .clone();
+
+        let mut gated = false;
+        let mut files = 0usize;
+        for entry in std::fs::read_dir(&src).unwrap_or_else(|e| panic!("{src:?}: {e}")) {
+            let path = entry.expect("dir entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            files += 1;
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            if text.contains("acquire::AcquisitionPolicy") || text.contains("authorize_or_error") {
+                gated = true;
+            }
+        }
+        assert!(
+            files > 0,
+            "no .rs files were scanned under {}",
+            src.display()
+        );
+        checked += 1;
+        assert!(
+            gated,
+            "ADR-015/NFR-S02: {name} opens a network connection but \
+             nothing in it calls `sandtree_policy::acquire`. The admission \
+             rule -- network acquisition only when penetrating the same \
+             resource and domain was refused -- is the security property of the \
+             whole channel; a plugin that does not route through it can fetch \
+             from a sandbox that the host can already read directly."
+        );
+    }
+    assert!(checked >= 2, "only {checked} network channels were checked");
+}
+
+/// ADR-OBS-003 as a repository fact: `GuestProbe` is the ceiling for anything
+/// obtained over the network, and the ceiling is defined in exactly one place.
+///
+/// The interesting failure is not "someone wrote the wrong constant" -- the
+/// per-crate tests catch that. It is someone adding a second definition of the
+/// ceiling in a plugin, which then drifts from the policy crate and quietly
+/// raises trust for one channel only.
+#[test]
+fn the_network_trust_ceiling_is_defined_in_exactly_one_place() {
+    let root = repo_root();
+    let policy = root
+        .join("crates")
+        .join("policy")
+        .join("src")
+        .join("acquire.rs");
+    let policy_text = std::fs::read_to_string(&policy).unwrap_or_default();
+
+    assert!(
+        policy_text.contains("pub const NETWORK_TRUST_CEILING"),
+        "the ceiling constant must live in crates/policy/src/acquire.rs; if it \
+         moved, this rule is checking the wrong file"
+    );
+
+    // Where a network channel is allowed to live.
+    let sources = provider_crate_sources(&root);
+    let mut scanned = 0usize;
+    for name in [
+        "sandtree-provider-git-remote",
+        "sandtree-provider-mcp-remote",
+    ] {
+        let src = sources
+            .get(name)
+            .unwrap_or_else(|| panic!("{name} is not present under plugins/"))
+            .clone();
+        for entry in std::fs::read_dir(&src).unwrap_or_else(|e| panic!("{src:?}: {e}")) {
+            let path = entry.expect("dir entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            scanned += 1;
+            // The ceiling may be *referenced*, never re-declared.
+            assert!(
+                !text.contains("const NETWORK_TRUST_CEILING"),
+                "{} re-declares the network trust ceiling. It must reference \
+                 `sandtree_policy::acquire::NETWORK_TRUST_CEILING`; a second \
+                 definition can drift from the policy crate and raise trust for \
+                 one channel only.",
+                path.display()
+            );
+        }
+    }
+    assert!(
+        scanned >= 10,
+        "only {scanned} provider source files were scanned; a walk that finds \
+         nothing reports the same 'clean' as a real pass"
+    );
 }
