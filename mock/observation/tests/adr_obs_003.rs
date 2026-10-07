@@ -86,6 +86,19 @@ fn observe(world: ResourceObservation) -> ObservationSnapshot {
         .expect("a scripted world without a security fault always answers")
 }
 
+/// The design's mode → ceiling table, written out here on purpose.
+///
+/// The exhaustive walk below must **not** read the expected ceiling back out of
+/// `mode_trust_ceiling`: a test that derives its expectation from the
+/// implementation cannot fail when the implementation changes, which is exactly
+/// the mutation this suite exists to catch.
+const CEILINGS: [(ObservationMode, TrustLevel); 4] = [
+    (ObservationMode::Native, TrustLevel::ProviderNative),
+    (ObservationMode::Exec, TrustLevel::RemoteExec),
+    (ObservationMode::Probe, TrustLevel::GuestProbe),
+    (ObservationMode::Metadata, TrustLevel::HostNative),
+];
+
 /// The headline invariant, over all 80 combinations.
 ///
 /// For every mode, every requested trust and every declared health, the emitted
@@ -93,9 +106,20 @@ fn observe(world: ResourceObservation) -> ObservationSnapshot {
 /// asked for.
 #[test]
 fn no_mode_trust_health_combination_can_exceed_its_ceiling() {
+    // The table itself, against the values written above rather than against
+    // anything the crate computes.
+    for (mode, expected) in CEILINGS {
+        assert_eq!(
+            mode_trust_ceiling(mode),
+            expected,
+            "{} must not exceed {}",
+            mode.as_str(),
+            expected.as_str()
+        );
+    }
+
     let mut checked = 0usize;
-    for mode in MODES {
-        let ceiling = mode_trust_ceiling(mode);
+    for (mode, ceiling) in CEILINGS {
         for trust in TRUSTS {
             for health in HEALTHS {
                 let snap = observe(world(mode, trust, health));

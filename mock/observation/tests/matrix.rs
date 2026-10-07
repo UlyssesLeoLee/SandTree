@@ -331,7 +331,10 @@ async fn a_snapshot_round_trips_through_json() {
         ObservationDomain::Health,
     ];
     let snap = provider
-        .observe(&ObservationRequest::new(scenario_id("wsb-healthy"), declared))
+        .observe(&ObservationRequest::new(
+            scenario_id("wsb-healthy"),
+            declared,
+        ))
         .await
         .expect("observes");
 
