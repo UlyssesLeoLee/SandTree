@@ -27,6 +27,7 @@ members = [
     "tests/contract",
     "tests/integration",
     "tests/system",
+    "mock/wasm-components",
 ]
 
 [workspace.package]

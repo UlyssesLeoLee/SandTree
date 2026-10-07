@@ -1,0 +1,105 @@
+{
+  "schema": "sandtree.mock.wasm-components/manifest@1",
+  "abi": {
+    "package": "sandtree:plugin@1.0.0",
+    "lifecycle_interface": "sandtree:plugin/lifecycle@1.0.0",
+    "resource_provider_interface": "sandtree:plugin/resource-provider@1.0.0",
+    "supported_world_majors": [1]
+  },
+  "note": [
+    "This manifest is what a host-side test drives: for each fixture it names the",
+    "file, the Rust constant holding the same text, and the outcome the plugin",
+    "host is required to produce. `expected_code` values are stable codes from",
+    "schemas/error_codes.csv.",
+    "",
+    "The three reject fixtures are byte-for-byte the valid one except for the",
+    "one targeted change named in `deviation`, so a rejection is attributable to",
+    "that change and nothing else."
+  ],
+  "fixtures": [
+    {
+      "id": "valid-provider-component",
+      "file": "fixtures/valid_provider_component.wat",
+      "const": "VALID_PROVIDER_COMPONENT_WAT",
+      "deviation": null,
+      "intent": "the accept path: a component implementing the whole provider-plugin world loads and yields a descriptor",
+      "declared_package": "sandtree:plugin@1.0.0",
+      "exports": [
+        "sandtree:plugin/lifecycle@1.0.0",
+        "sandtree:plugin/resource-provider@1.0.0",
+        "descriptor-record",
+        "list-u8",
+        "option-string",
+        "result-unit-string",
+        "result-string-string",
+        "result-list-u8-string"
+      ],
+      "expected_outcome": "accept",
+      "expected_code": null,
+      "rejected_at": null,
+      "blocked": "Component-Model named-type export rule: an exported function may only use named value types, and exporting `descriptor-record` yields a freshly aliased type identity that `lifecycle.descriptor` does not reference. wasmtime 38 reports `instance not valid to be used as export`. The canonical ABI core signatures are otherwise accepted (each was fixed against the compiler). Fixing this needs an `(alias outer ...)` re-reference of the exported type, which is not expressible with confidence in hand-written WAT in this window."
+    },
+    {
+      "id": "wrong-package-name",
+      "file": "fixtures/wrong_package_name.wat",
+      "const": "WRONG_PACKAGE_NAME_WAT",
+      "deviation": "both interface export names use the namespace `evil` instead of `sandtree`",
+      "intent": "a foreign interface namespace is refused before instantiation",
+      "declared_package": "evil:plugin@1.0.0",
+      "exports": [
+        "evil:plugin/lifecycle@1.0.0",
+        "evil:plugin/resource-provider@1.0.0"
+      ],
+      "expected_outcome": "reject",
+      "expected_code": "ST-PLG-001",
+      "rejected_at": "verify_component_package",
+      "blocked": null
+    },
+    {
+      "id": "missing-required-export",
+      "file": "fixtures/missing_required_export.wat",
+      "const": "MISSING_REQUIRED_EXPORT_WAT",
+      "deviation": "the `resource-provider` instance is defined but not exported",
+      "intent": "a component that exports lifecycle but not resource-provider does not satisfy the world",
+      "declared_package": "sandtree:plugin@1.0.0",
+      "exports": [
+        "sandtree:plugin/lifecycle@1.0.0"
+      ],
+      "expected_outcome": "reject",
+      "expected_code": "ST-PLG-001",
+      "rejected_at": "ProviderPlugin::instantiate",
+      "blocked": null
+    },
+    {
+      "id": "interface-version-mismatch",
+      "file": "fixtures/interface_version_mismatch.wat",
+      "const": "INTERFACE_VERSION_MISMATCH_WAT",
+      "deviation": "both interface export names carry world version 2.0.0 instead of 1.0.0",
+      "intent": "a component built against a world version this host does not accept is refused",
+      "declared_package": "sandtree:plugin@2.0.0",
+      "exports": [
+        "sandtree:plugin/lifecycle@2.0.0",
+        "sandtree:plugin/resource-provider@2.0.0"
+      ],
+      "expected_outcome": "reject",
+      "expected_code": "ST-PLG-001",
+      "rejected_at": "verify_component_package",
+      "blocked": null
+    },
+    {
+      "id": "no-sandtree-exports",
+      "file": "fixtures/no_sandtree_exports.wat",
+      "const": "NO_SANDTREE_EXPORTS_WAT",
+      "deviation": "standalone component exporting only `ping`",
+      "intent": "a valid component with no SandTree interface at all is refused",
+      "declared_package": null,
+      "exports": [
+        "ping"
+      ],
+      "expected_outcome": "reject",
+      "expected_code": "ST-PLG-001",
+      "rejected_at": "ProviderPlugin::instantiate",
+      "blocked": null
+    }
+  ]
+}

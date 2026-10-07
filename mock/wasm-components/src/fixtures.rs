@@ -1,0 +1,270 @@
+//! The fixture corpus: one hand-written `.wat` component per install outcome.
+//!
+//! Each fixture is available three ways, because a host-side test may want any
+//! of them:
+//!
+//! * as a Rust constant ([`VALID_PROVIDER_COMPONENT_WAT`] and friends) so it
+//!   can be handed to `wasmtime::component::Component::new` with nothing on
+//!   disk — this is what makes the corpus usable without a wasm32 target;
+//! * as a file under `fixtures/` for a human to read;
+//! * as a [`Fixture`] value carrying the intent and the expected outcome.
+//!
+//! # The valid fixture is derived by construction
+//!
+//! The four ABI-shaped fixtures are byte-for-byte the valid one except for the
+//! one targeted change that gives each its meaning (the interface namespace,
+//! the world version, one removed export). That is not tidiness — it is what
+//! makes a rejection attributable. If the wrong-package fixture also had a
+//! broken function body, a test that rejected it would prove nothing about the
+//! namespace check.
+//! [`crate::manifest`] and the tests in [`tests`] lock the relationship down.
+
+/// A valid, fully ABI-conformant `provider-plugin` component.
+///
+/// Outcome: **accept**. `ComponentGeneration::load` must compile it,
+/// instantiate the world, and read `lifecycle.descriptor` without error.
+pub const VALID_PROVIDER_COMPONENT_WAT: &str =
+    include_str!("../fixtures/valid_provider_component.wat");
+
+/// The same component exporting its interfaces under a foreign namespace.
+///
+/// Outcome: **reject `ST-PLG-001`** — the namespace is not `sandtree`.
+pub const WRONG_PACKAGE_NAME_WAT: &str = include_str!("../fixtures/wrong_package_name.wat");
+
+/// The same component with `resource-provider` defined but not exported.
+///
+/// Outcome: **reject `ST-PLG-001`** — the world requires both interfaces.
+pub const MISSING_REQUIRED_EXPORT_WAT: &str =
+    include_str!("../fixtures/missing_required_export.wat");
+
+/// The same component pinned to world version `2.0.0`.
+///
+/// Outcome: **reject `ST-PLG-001`** — only world major 1 is accepted.
+pub const INTERFACE_VERSION_MISMATCH_WAT: &str =
+    include_str!("../fixtures/interface_version_mismatch.wat");
+
+/// A valid component with no SandTree interface at all.
+///
+/// Outcome: **reject `ST-PLG-001`** — compiles, instantiates, exports nothing
+/// the host can bind.
+pub const NO_SANDTREE_EXPORTS_WAT: &str = include_str!("../fixtures/no_sandtree_exports.wat");
+
+/// The `lifecycle` interface name the host binds against.
+pub const LIFECYCLE_INTERFACE_1: &str = "sandtree:plugin/lifecycle@1.0.0";
+
+/// The `resource-provider` interface name the host binds against.
+pub const RESOURCE_PROVIDER_INTERFACE_1: &str = "sandtree:plugin/resource-provider@1.0.0";
+
+/// The `ns:name@version` package a component declares, derived from one of its
+/// interface export names.
+///
+/// This is the string a host hands to
+/// `sandtree_sdk::wit::verify_component_package`. Interface export names are
+/// `ns:name/interface@version`, so the package is that name with the interface
+/// segment removed. A component that exports no interface declares no package
+/// at all, which is a distinct case from declaring a wrong one — and the
+/// difference is why this returns an `Option`.
+pub fn package_of(interface_export: &str) -> Option<String> {
+    let (ns_name, version) = interface_export.rsplit_once('@')?;
+    // `ns_name` is `ns:name/interface`; dropping the interface segment is a
+    // splice out of the middle, so this cannot hand back a borrowed slice.
+    let (pkg, interface) = ns_name.split_once('/')?;
+    if interface.is_empty() || pkg.is_empty() || version.is_empty() {
+        return None;
+    }
+    Some(format!("{pkg}@{version}"))
+}
+
+/// What the host is expected to do with a fixture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Expectation {
+    /// The component must load: compile, instantiate, and bind.
+    Accept,
+    /// The component must be refused.
+    Reject {
+        /// Stable error code from `schemas/error_codes.csv`.
+        code: &'static str,
+        /// The check that must produce it.
+        at: &'static str,
+        /// Why that check fires for this fixture.
+        why: &'static str,
+    },
+}
+
+impl Expectation {
+    /// The stable error code this outcome expects, or `None` for accept.
+    pub const fn code(&self) -> Option<&'static str> {
+        match *self {
+            Expectation::Accept => None,
+            Expectation::Reject { code, .. } => Some(code),
+        }
+    }
+
+    /// Whether the outcome is a refusal.
+    pub const fn is_reject(&self) -> bool {
+        matches!(self, Expectation::Reject { .. })
+    }
+}
+
+/// One component fixture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fixture {
+    /// Valid provider component — the accept case.
+    ValidProviderComponent,
+    /// Interfaces exported under `evil:plugin/...`.
+    WrongPackageName,
+    /// `resource-provider` defined but not exported.
+    MissingRequiredExport,
+    /// Interfaces pinned to world version `2.0.0`.
+    InterfaceVersionMismatch,
+    /// Valid component, no SandTree interfaces.
+    NoSandTreeExports,
+}
+
+impl Fixture {
+    /// Every fixture, in the order `MANIFEST.json` lists them.
+    pub const ALL: [Fixture; 5] = [
+        Fixture::ValidProviderComponent,
+        Fixture::WrongPackageName,
+        Fixture::MissingRequiredExport,
+        Fixture::InterfaceVersionMismatch,
+        Fixture::NoSandTreeExports,
+    ];
+
+    /// Stable identifier, matching the `id` field in `MANIFEST.json`.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Fixture::ValidProviderComponent => "valid-provider-component",
+            Fixture::WrongPackageName => "wrong-package-name",
+            Fixture::MissingRequiredExport => "missing-required-export",
+            Fixture::InterfaceVersionMismatch => "interface-version-mismatch",
+            Fixture::NoSandTreeExports => "no-sandtree-exports",
+        }
+    }
+
+    /// Fixture source as a Rust constant — no file needed at test time.
+    pub const fn wat(&self) -> &'static str {
+        match self {
+            Fixture::ValidProviderComponent => VALID_PROVIDER_COMPONENT_WAT,
+            Fixture::WrongPackageName => WRONG_PACKAGE_NAME_WAT,
+            Fixture::MissingRequiredExport => MISSING_REQUIRED_EXPORT_WAT,
+            Fixture::InterfaceVersionMismatch => INTERFACE_VERSION_MISMATCH_WAT,
+            Fixture::NoSandTreeExports => NO_SANDTREE_EXPORTS_WAT,
+        }
+    }
+
+    /// Fixture source relative to this crate's root.
+    pub const fn file(&self) -> &'static str {
+        match self {
+            Fixture::ValidProviderComponent => "fixtures/valid_provider_component.wat",
+            Fixture::WrongPackageName => "fixtures/wrong_package_name.wat",
+            Fixture::MissingRequiredExport => "fixtures/missing_required_export.wat",
+            Fixture::InterfaceVersionMismatch => "fixtures/interface_version_mismatch.wat",
+            Fixture::NoSandTreeExports => "fixtures/no_sandtree_exports.wat",
+        }
+    }
+
+    /// What this fixture exists to prove.
+    pub const fn intent(&self) -> &'static str {
+        match self {
+            Fixture::ValidProviderComponent => {
+                "the accept path: a component implementing the whole \
+                 provider-plugin world loads and yields a descriptor"
+            }
+            Fixture::WrongPackageName => {
+                "a foreign interface namespace is refused before instantiation"
+            }
+            Fixture::MissingRequiredExport => {
+                "a component that exports lifecycle but not resource-provider \
+                 does not satisfy the world"
+            }
+            Fixture::InterfaceVersionMismatch => {
+                "a component built against a world version this host does not \
+                 accept is refused"
+            }
+            Fixture::NoSandTreeExports => {
+                "a valid component with no SandTree interface at all is refused"
+            }
+        }
+    }
+
+    /// The package this fixture declares, or `None` when it declares none.
+    ///
+    /// `None` is not the same as a rejected package: "declares nothing" must
+    /// not be reported as "declares the wrong thing".
+    pub const fn declared_package(&self) -> Option<&'static str> {
+        match self {
+            Fixture::ValidProviderComponent => Some("sandtree:plugin@1.0.0"),
+            Fixture::WrongPackageName => Some("evil:plugin@1.0.0"),
+            // Exports lifecycle@1.0.0, so the declared package is right; the
+            // failure is the missing interface, not the package identity.
+            Fixture::MissingRequiredExport => Some("sandtree:plugin@1.0.0"),
+            Fixture::InterfaceVersionMismatch => Some("sandtree:plugin@2.0.0"),
+            Fixture::NoSandTreeExports => None,
+        }
+    }
+
+    /// The component's top-level exports, as the host will see them.
+    ///
+    /// Asserted against a compiled component by the engine-gated tests; a host
+    /// that reads this list should reach the same conclusion [`Self::expectation`]
+    /// encodes.
+    pub const fn expected_exports(&self) -> &'static [&'static str] {
+        match self {
+            Fixture::ValidProviderComponent => {
+                &[LIFECYCLE_INTERFACE_1, RESOURCE_PROVIDER_INTERFACE_1]
+            }
+            Fixture::WrongPackageName => &[
+                "evil:plugin/lifecycle@1.0.0",
+                "evil:plugin/resource-provider@1.0.0",
+            ],
+            Fixture::MissingRequiredExport => &[LIFECYCLE_INTERFACE_1],
+            Fixture::InterfaceVersionMismatch => &[
+                "sandtree:plugin/lifecycle@2.0.0",
+                "sandtree:plugin/resource-provider@2.0.0",
+            ],
+            Fixture::NoSandTreeExports => &["ping"],
+        }
+    }
+
+    /// What the plugin host must do with this component.
+    pub const fn expectation(&self) -> Expectation {
+        match self {
+            Fixture::ValidProviderComponent => Expectation::Accept,
+            Fixture::WrongPackageName => Expectation::Reject {
+                code: "ST-PLG-001",
+                at: "verify_component_package",
+                why: "component namespace `evil` is not `sandtree`",
+            },
+            Fixture::MissingRequiredExport => Expectation::Reject {
+                code: "ST-PLG-001",
+                at: "ProviderPlugin::instantiate",
+                why: "world requires resource-provider@1.0.0, which is not exported",
+            },
+            Fixture::InterfaceVersionMismatch => Expectation::Reject {
+                code: "ST-PLG-001",
+                at: "verify_component_package",
+                why: "world major 2 is not in SUPPORTED_WORLD_MAJORS",
+            },
+            Fixture::NoSandTreeExports => Expectation::Reject {
+                code: "ST-PLG-001",
+                at: "ProviderPlugin::instantiate",
+                why: "no sandtree:plugin interface is exported",
+            },
+        }
+    }
+
+    /// Whether the fixture is a deliberate deviation from the valid one.
+    pub const fn is_derived(&self) -> bool {
+        !matches!(
+            self,
+            Fixture::ValidProviderComponent | Fixture::NoSandTreeExports
+        )
+    }
+}
+
+impl std::fmt::Display for Fixture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
