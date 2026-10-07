@@ -1506,6 +1506,8 @@ dependencies = [
  "sandtree-event",
  "sandtree-ipc",
  "sandtree-kernel",
+ "sandtree-mock-observation",
+ "sandtree-mock-runtime",
  "sandtree-model",
  "sandtree-observation-core",
  "sandtree-observation-model",
@@ -1801,6 +1803,33 @@ dependencies = [
  "sandtree-observation-model",
  "sandtree-plugin-host",
  "sandtree-policy",
+ "sandtree-sdk",
+ "sandtree-store",
+ "sandtree-vfs",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "sandtree-uat-tests"
+version = "1.1.0"
+dependencies = [
+ "rusqlite",
+ "sandtree-daemon",
+ "sandtree-event",
+ "sandtree-ipc",
+ "sandtree-kernel",
+ "sandtree-mock-observation",
+ "sandtree-mock-runtime",
+ "sandtree-mock-wasm-components",
+ "sandtree-model",
+ "sandtree-observation-core",
+ "sandtree-observation-model",
+ "sandtree-plugin-host",
+ "sandtree-policy",
+ "sandtree-provider-docker",
+ "sandtree-resource-graph",
  "sandtree-sdk",
  "sandtree-store",
  "sandtree-vfs",

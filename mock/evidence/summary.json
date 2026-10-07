@@ -1,0 +1,45 @@
+{
+  "run": "20261007-181514",
+  "total_cases": 159,
+  "total_tests_executed": 921,
+  "tests_passed": 920,
+  "tests_failed": 0,
+  "tests_ignored": 1,
+  "ignored_tests": [
+    "provider::tests::health_reports_a_usable_engine_as_healthy"
+  ],
+  "gate_exit": {
+    "contract": 0,
+    "it": 0,
+    "mock": 0,
+    "st": 0,
+    "uat": 0,
+    "ut": 0
+  },
+  "by_layer": {
+    "UT": {
+      "PASS": 49,
+      "UNMAPPED": 1
+    },
+    "IT": {
+      "PASS": 47,
+      "UNMAPPED": 2
+    },
+    "ST": {
+      "PASS": 34,
+      "UNMAPPED": 3
+    },
+    "UAT": {
+      "MANUAL": 23
+    }
+  },
+  "failing_cases": [],
+  "unmapped_cases": [
+    "UT-025",
+    "IT-005",
+    "IT-008",
+    "ST-003",
+    "ST-008",
+    "ST-026"
+  ]
+}

@@ -18,6 +18,11 @@
 | ADR-007 | `tests/*` 由 `[lib]` 改为测试二进制 | ARCH §11 | 已实现 |
 | ADR-008 | license 门禁的离线替代实现 | DD-SECOPS / 09 许可基线 | 已实现，待评审 |
 | ADR-009 | 根 `workspace.dependencies` 的 bollard 版本回退到 0.18 | DD-SW §1 | 已实现 |
+| ADR-010 | `crates/*` 禁止依赖 mock crate，仅 `tests/*` 可用 | DD-SW §1 | 已实现 |
+| ADR-011 | provider-docker 唯一依赖活 daemon 的测试移出默认门禁 | DD-SW §1 | 已实现 |
+| ADR-012 | lane 交付由门禁裁决，不由子代理完成声明裁决 | DD-SW §1 | 已实现 |
+| ADR-013 | `upsert_docker_endpoint` 把 TCP 端口误判为凭据（缺陷修复） | DD-DATA §4 | 已实现 |
+| ADR-014 | discovery 逐页写 relations 触发外键失败（缺陷修复） | DD-SW §4 | 已实现 |
 
 ---
 
@@ -185,3 +190,53 @@ lane 内保留 checkpoint commit，避免通道断线时丢失工作。
 **规则**　报告「某部分已验证」时，写的是**实际跑过的门禁**，不是仓库拥有的门禁。
 未执行到的测试目标必须显式说明。
 
+---
+
+## ADR-013 `upsert_docker_endpoint` 把 TCP 端口误判为凭据（缺陷修复）
+
+**问题**　`crates/store` 的 NFR-S03 校验把「authority 中第一个 `@` 之前含有 `:`」
+当成嵌入凭据。这个启发式无法区分 `user:password@host` 与 `host:2376` —— 二者都满足
+「含 `:` 且不以 `//` 开头」。结果是**任何 TCP 形式的 Docker 端点都被拒绝存储**，
+返回 `ST-POL-001 docker endpoint URI must not embed credentials`。命名管道与
+unix socket 不受影响（其 authority 为空），所以只测这两条路径的用例全绿。
+
+**影响**　UAT-018「非 Desktop Docker 端点可寻址」所覆盖的远程 engine 场景完全不可配置：
+非本机 Docker、TCP 远程 daemon、SSH 隧道暴露的 TCP 端口都存不进 store。这是 NFR-E02
+的直接反例，也使该用例的「可寻址」半边无法成立。
+
+**决策**　按 RFC 3986 判定：URI authority 为 `<userinfo@>host[:port]`，因此
+**authority 中出现 `@` 即为携带身份**。端口分隔符 `:` 不再参与判定。
+
+- `tcp://10.0.0.5:2375`、`tcp://docker.internal:2376` —— 接受
+- `tcp://admin:hunter2@10.0.0.1:2375`、`tcp://admin@10.0.0.1:2375` —— 拒绝（用户名本身也是 userinfo）
+- `npipe:////./pipe/docker_engine`、`unix:///var/run/docker.sock` —— 接受
+
+**连带**　诊断 bundle 的 `strip_userinfo` 成为纵深防御而非唯一防线：store 已在源头拒绝，
+bundle 仍对历史遗留行脱敏（UAT-015 同时验证两层）。
+
+**回归门禁**　`crates/store/src/repo.rs::a_tcp_port_is_not_mistaken_for_a_credential`，
+一条用例同时钉住「合法 TCP 必须可存」与「凭据必须被拒」两侧，并断言拒绝信息引用 NFR-S03。
+
+---
+
+## ADR-014 discovery 逐页写 relations 触发外键失败（缺陷修复）
+
+**问题**　`resource_relation` 声明 `FOREIGN KEY(from_id/to_id) REFERENCES resource(id)`。
+`ResourceManager::discover_all` 的写法是每取回一页就立刻
+`upsert_resources(&batch.resources)` 再 `upsert_relations(&batch.relations)`。但分页遵循
+provider 的 pre-order，**第 0 页的一条关系完全可以指向第 1 页才投递的资源**。
+此时整次扫描以 `FOREIGN KEY constraint failed` 失败。
+
+**为什么一直没被发现**　只有「关系跨越分页边界」的 provider 会触发。无关系的 fixture、
+或关系两端同页的 fixture 全部通过。`DOCKER_WORLD` 是仓库里第一个 page_size=3、
+关系跨页的 fixture —— 它此前从未被送进 kernel 的 discovery 路径（本轮 UAT 才第一次）。
+
+**决策**　关系在**扫描结束、游标链走完之后**统一写入一次（FR-061：关系只有在其
+两端资源都存在时才有意义）。资源仍逐页写入以保持 `last_seen` 的新鲜度语义。
+
+**失败与降级的区别**　扫描中途 provider 报错时 `break`，此时缓冲的关系不再写入，
+该 provider 本轮的关系集合保持上一次成功扫描的状态 —— 不会写入指向未知资源的边。
+
+**回归门禁**　`tests/integration/tests/discovery.rs::relations_that_span_a_page_boundary_are_still_written`，
+用例先断言 fixture 确实分页且确实存在跨页关系（否则测试会证明不了任何东西），
+再断言两端资源与关系本身都在库里、且资源数精确为 5。

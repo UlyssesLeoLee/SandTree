@@ -1,0 +1,42 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.24s
+     Running tests\invariants.rs (E:\DevCache\cargo\target-dev\debug\deps\invariants-c70bfab4d58bd0e3.exe)
+
+running 5 tests
+test relation_kinds_are_all_representable_in_the_frozen_model ... ok
+test the_microkernel_crates_reach_no_provider_crate ... ok
+test every_must_row_in_the_technology_baseline_is_rust_facing ... ok
+test the_microkernel_crates_declare_no_provider_sdk ... ok
+test only_test_targets_depend_on_the_mock_crates ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-f309b87ca2904901.exe)
+
+running 24 tests
+test ddl::the_ddl_still_declares_the_tables_the_code_queries ... ok
+test manifest_schema::the_schema_pins_the_version_the_code_accepts ... ok
+test resource_model::state_and_relation_wire_names_round_trip ... ok
+test error_codes::the_csv_is_well_formed ... ok
+test error_codes::observation_codes_match_their_own_registry ... ok
+test error_codes::every_shipped_code_is_in_the_frozen_registry ... ok
+test error_codes::the_two_registries_do_not_overlap ... ok
+test error_codes::retryable_flags_in_the_csv_match_the_implementation ... ok
+test observation_model::every_observation_domain_has_a_wire_name_and_a_budget ... ok
+test manifest_schema::the_plugin_id_pattern_in_the_schema_is_what_the_parser_enforces ... ok
+test error_codes::every_registered_code_is_implemented ... ok
+test observation_model::observation_mode_wire_names_round_trip ... ok
+test observation_model::only_host_native_is_security_authoritative ... ok
+test resource_model::resource_kind_wire_names_are_unique_and_snake_case ... ok
+test error_codes::category_prefixes_match_the_declared_category ... ok
+test wit::the_both_worlds_keep_their_declared_names ... ok
+test wit::the_shipped_constants_match_the_frozen_files ... ok
+test workspace_uri::a_foreign_scheme_is_refused ... ok
+test workspace_uri::the_uri_scheme_is_stable ... ok
+test manifest_schema::every_required_field_in_the_schema_is_required_by_the_parser ... ok
+test observation_model::trust_levels_never_rise_under_comparison ... ok
+test wit::the_host_accepts_its_own_wit_and_refuses_the_other ... ok
+test wit::the_lifecycle_interface_still_exposes_every_designed_call ... ok
+test ddl::the_shipped_ddl_applies_to_an_empty_database ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

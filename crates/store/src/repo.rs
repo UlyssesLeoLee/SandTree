@@ -556,19 +556,28 @@ impl Store {
     }
 
     /// Upsert a Docker endpoint profile. The URI must not embed credentials.
+    ///
+    /// NFR-S03. A URI authority is `<userinfo@>host[:port]`, so a credential is
+    /// present exactly when the authority contains `@`. The previous check
+    /// treated any `:` before the first `@` as a credential, which cannot
+    /// distinguish `user:password@host` from `host:2376` — so it refused
+    /// **every** TCP endpoint, including the remote-engine case UAT-018 exists
+    /// to cover. The split tests the host part against credentials, not the
+    /// port separator.
     pub fn upsert_docker_endpoint(&self, row: &DockerEndpointRow) -> Result<(), DomainError> {
-        if let Some(bad) = row
+        let authority = row
             .uri
-            .split("://")
-            .nth(1)
-            .and_then(|r| r.split('@').next())
-        {
-            if bad.contains(':') && !bad.starts_with("//") {
-                return Err(DomainError::new(
-                    ErrorCode::POLICY_DENIED,
-                    "docker endpoint URI must not embed credentials (NFR-S03)",
-                ));
-            }
+            .split_once("://")
+            .map(|(_, rest)| rest.split('/').next().unwrap_or(""))
+            .unwrap_or("");
+        if authority.contains('@') {
+            return Err(DomainError::new(
+                ErrorCode::POLICY_DENIED,
+                format!(
+                    "docker endpoint URI must not embed credentials (NFR-S03): {}",
+                    row.uri
+                ),
+            ));
         }
         self.write(|tx| {
             tx.execute(
@@ -1156,6 +1165,63 @@ mod tests {
         };
         let err = s.upsert_docker_endpoint(&bad).unwrap_err();
         assert_eq!(err.code, ErrorCode::POLICY_DENIED);
+    }
+
+    #[test]
+    fn a_tcp_port_is_not_mistaken_for_a_credential() {
+        // NFR-S03, and the other half of the same rule. The previous check
+        // rejected any authority containing ':', which cannot tell
+        // `user:password@host` from `host:2376` -- so it refused every TCP
+        // endpoint, and with them the entire remote-engine story (UAT-018). A
+        // guard that blocks the legitimate case is not a guard.
+        let s = Store::open_in_memory().unwrap();
+        for (i, uri) in [
+            "tcp://10.0.0.5:2375",
+            "tcp://docker.internal:2376",
+            "npipe:////./pipe/docker_engine",
+            "unix:///var/run/docker.sock",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            s.upsert_docker_endpoint(&DockerEndpointRow {
+                id: EndpointId::derive(&["ok", &i.to_string()]),
+                uri: uri.into(),
+                api_version: None,
+                engine_version: None,
+                os: None,
+                arch: None,
+                health: "unknown".into(),
+            })
+            .unwrap_or_else(|e| panic!("{uri} carries no credential and must be storable: {e}"));
+        }
+        assert_eq!(s.list_docker_endpoints().unwrap().len(), 4);
+
+        // A bare username is still userinfo, so it is still refused: an `@`
+        // anywhere in the authority means the URI is carrying an identity.
+        for uri in [
+            "tcp://admin:hunter2@10.0.0.1:2375",
+            "tcp://admin@10.0.0.1:2375",
+            "https://user:pw@registry.example.com/v2",
+        ] {
+            let err = s
+                .upsert_docker_endpoint(&DockerEndpointRow {
+                    id: EndpointId::derive(&["bad", uri]),
+                    uri: uri.into(),
+                    api_version: None,
+                    engine_version: None,
+                    os: None,
+                    arch: None,
+                    health: "unknown".into(),
+                })
+                .unwrap_err();
+            assert_eq!(err.code, ErrorCode::POLICY_DENIED, "{uri}");
+            assert!(
+                err.message.contains("NFR-S03"),
+                "the refusal cites the rule it enforces, so an operator can act \
+                 on it without reading the source: {err}"
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,50 @@
+[package]
+name = "sandtree-uat-tests"
+description = "SandTree UAT: the machine-checkable half of the 23 acceptance cases, driven by the mock crates (AC-01, NFR-U01/U02, NFR-E02, FR-070/076/079)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# The design records all 23 UAT cases as Automation = "No", because the real
+# thing needs a UAT machine, a real Docker/Sandbox setup and an operator. That
+# part cannot be automated and is not automated here.
+#
+# What this crate does is run the half of each acceptance case that *is* a
+# machine-checkable contract: the tree is well formed, the destructive action
+# refuses and says why, the trust ladder never rises, the bundle carries no
+# secret. Without that, UAT is a checklist with no automated floor, and a
+# regression in any of those contracts is only found by a person.
+#
+# Every test below names the design case it covers, and the case map
+# (mock/scripts/case_map.csv) records which test carries which case so the
+# coverage matrix can show what is automated and what is still a human's job.
+[dependencies]
+sandtree-event.workspace = true
+sandtree-ipc.workspace = true
+sandtree-kernel.workspace = true
+sandtree-model.workspace = true
+sandtree-observation-core.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-plugin-host.workspace = true
+sandtree-policy.workspace = true
+sandtree-resource-graph.workspace = true
+sandtree-sdk.workspace = true
+sandtree-store.workspace = true
+sandtree-vfs.workspace = true
+sandtree-daemon.workspace = true
+sandtree-provider-docker.workspace = true
+
+# Mock crates: the only way to exercise the control and observation planes
+# without a Docker daemon, a Multipass install and a Windows Sandbox session.
+# This is the dependency direction the design allows -- mock crates may be used
+# by test targets, never by crates/*.
+sandtree-mock-runtime.workspace = true
+sandtree-mock-observation.workspace = true
+sandtree-mock-wasm-components.workspace = true
+
+rusqlite.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

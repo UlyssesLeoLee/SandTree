@@ -1,0 +1,262 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.21s
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_observation-233155f3e07f72ab.exe)
+
+running 33 tests
+test fault::tests::codes_come_from_the_registry_and_match_the_table ... ok
+test fault::tests::surfaced_errors_keep_detail_out_of_the_message ... ok
+test fault::tests::only_partial_coverage_withholds_specific_domains ... ok
+test fixture::tests::a_partial_coverage_fault_may_withhold_a_domain ... ok
+test fault::tests::warnings_lead_with_the_stable_code ... ok
+test fixture::tests::a_mode_restriction_must_be_a_subset ... ok
+test fixture::tests::a_fixture_round_trips_through_json_unchanged ... ok
+test fixture::tests::malformed_json_is_reported_as_such ... ok
+test fixture::tests::values_must_exist_for_every_declared_domain ... ok
+test provider::tests::health_follows_coverage_then_the_declared_state ... ok
+test fixture::tests::a_wrong_schema_tag_is_refused ... ok
+test fixture::tests::an_empty_source_is_refused ... ok
+test fixture::tests::a_default_resource_is_valid_and_metadata_only ... ok
+test fixture::tests::an_unparsable_timestamp_is_refused ... ok
+test fixture::tests::an_unsorted_domain_list_is_refused ... ok
+test fixture::tests::disposition_defaults_to_the_fault_policy ... ok
+test fixture::tests::identity_is_derived_from_the_parts ... ok
+test fault::tests::only_protocol_and_security_faults_surface ... ok
+test fixture::tests::a_resource_without_modes_is_refused ... ok
+test fixture::tests::a_stale_resource_must_declare_an_age ... ok
+test provider::tests::an_unscripted_resource_is_a_mock_fact_not_a_host_claim ... ok
+test provider::tests::capabilities_declare_a_native_credential_requirement ... ok
+test provider::tests::select_mode_follows_the_priority_order ... ok
+test trust::tests::an_implied_ceiling_is_neither_refusal_nor_downgrade ... ok
+test provider::tests::picks_the_least_invasive_mode_that_can_serve_the_request ... ok
+test trust::tests::derived_ord_is_the_inverse_of_rank ... ok
+test fixture::tests::resource_ids_are_sorted_and_deduplicated ... ok
+test trust::tests::a_declared_ceiling_can_only_narrow ... ok
+test trust::tests::a_permitted_request_is_left_alone ... ok
+test trust::tests::the_ceiling_bound_holds_for_every_pair ... ok
+test trust::tests::guest_probe_is_never_promoted_by_resolution ... ok
+test trust::tests::mode_ceilings_match_the_design_table ... ok
+test trust::tests::refusal_warning_names_requested_and_effective ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\adr_obs_001.rs (E:\DevCache\cargo\target-dev\debug\deps\adr_obs_001-31caf235c82a658b.exe)
+
+running 12 tests
+test a_disposition_override_can_force_the_error_branch ... ok
+test a_request_no_mode_can_serve_is_a_typed_no_strategy_error ... ok
+test protocol_and_security_faults_surface_and_are_auditable ... ok
+test a_degraded_observation_plane_yields_an_unavailable_snapshot ... ok
+test every_degradable_fault_yields_a_snapshot_rather_than_an_error ... ok
+test a_declared_and_derived_degradation_agree ... ok
+test a_dead_channel_reports_no_trust_at_all ... ok
+test a_declared_degraded_channel_stays_degraded_with_complete_coverage ... ok
+test an_observation_failure_never_removes_the_resource ... ok
+test the_metadata_floor_stays_available_while_the_rich_mode_is_down ... ok
+test partial_coverage_keeps_the_domains_that_did_arrive ... ok
+test an_unscripted_resource_does_not_claim_the_resource_is_absent ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\adr_obs_003.rs (E:\DevCache\cargo\target-dev\debug\deps\adr_obs_003-37ad54725c8ff420.exe)
+
+running 9 tests
+test a_degraded_snapshot_does_not_invent_a_trust_claim ... ok
+test only_metadata_mode_may_report_host_native ... ok
+test a_verified_evidence_hash_does_not_promote_guest_probe ... ok
+test a_fault_does_not_open_a_trust_side_channel ... ok
+test no_probe_snapshot_in_the_corpus_is_security_authoritative ... ok
+test a_refused_upgrade_is_reported_on_the_snapshot ... ok
+test a_declared_ceiling_above_the_mode_ceiling_is_refused ... ok
+test the_corpus_attack_fixtures_stay_below_their_ceiling ... ok
+test no_mode_trust_health_combination_can_exceed_its_ceiling ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\faults.rs (E:\DevCache\cargo\target-dev\debug\deps\faults-569367e74fd7a7bc.exe)
+
+running 10 tests
+test a_probe_bootstrap_failure_reports_the_channel_down ... ok
+test deadline_exceeded_is_a_retryable_unavailable_snapshot ... ok
+test disposition_overrides_are_honoured_in_both_directions ... ok
+test a_guest_path_escape_is_refused_and_named ... ok
+test a_denied_credential_is_declared_in_the_capabilities ... ok
+test a_nested_engine_outage_marks_docker_partial_not_absent ... ok
+test partial_coverage_has_no_error_code_and_keeps_the_rest ... ok
+test an_invalid_envelope_surfaces_with_audit_detail ... ok
+test the_corpus_exercises_every_fault_kind ... ok
+test the_scenario_corpus_matches_its_documented_behaviour ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\fixture_corpus.rs (E:\DevCache\cargo\target-dev\debug\deps\fixture_corpus-0c8edcc485cb9dcc.exe)
+
+running 5 tests
+test the_hygiene_scanner_detects_what_it_claims_to ... ok
+test no_fixture_carries_a_host_path_or_a_credential ... ok
+test the_corpus_ships_exactly_one_path_escape_fixture ... ok
+test the_corpus_covers_every_mode_health_and_trust_rung ... ok
+test every_shipped_fixture_loads_and_validates ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\matrix.rs (E:\DevCache\cargo\target-dev\debug\deps\matrix-4eddfb1499dde9fe.exe)
+
+running 12 tests
+test a_missing_deadline_falls_back_to_the_domain_budget ... ok
+test the_health_domain_reports_mode_deadline_and_served_domains ... ok
+test health_is_a_function_of_the_fixture_not_of_call_order ... ok
+test a_snapshot_carries_only_the_declared_dto_fields ... ok
+test an_unservable_requested_domain_degrades_the_snapshot ... ok
+test values_serialise_in_sorted_domain_order ... ok
+test warnings_are_deduplicated_and_stable ... ok
+test capabilities_are_ordered_and_never_speculate ... ok
+test the_same_fixture_yields_identical_snapshots ... ok
+test repeated_observation_is_stable ... ok
+test a_snapshot_round_trips_through_json ... ok
+test the_whole_corpus_observes_deterministically ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_runtime-fa05a29890def505.exe)
+
+running 7 tests
+test fixture::tests::error_codes_must_come_from_the_shipped_registry ... ok
+test fixture::tests::enum_fields_accept_both_wire_spellings ... ok
+test fixture::tests::unknown_enum_values_are_rejected_not_defaulted ... ok
+test fixture::tests::fixture_round_trips_through_json ... ok
+test fixture::tests::relation_kind_accepts_both_spellings_and_rejects_rubbish ... ok
+test fixture::tests::operation_kinds_must_be_real ... ok
+test fixture::tests::missing_file_is_reported_as_io_error ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\determinism.rs (E:\DevCache\cargo\target-dev\debug\deps\determinism-d655f23d945c0283.exe)
+
+running 10 tests
+test a_provider_that_cycles_between_two_cursors_is_stopped ... ok
+test an_empty_provider_list_scans_to_nothing ... ok
+test a_cursor_that_does_not_advance_terminates_the_scan ... ok
+test an_unavailable_provider_fails_every_call_but_still_reports_health ... ok
+test a_provider_that_ends_its_cursor_chain_terminates_the_scan ... ok
+test a_provider_that_fails_mid_scan_keeps_its_earlier_pages ... ok
+test a_fresh_scan_reproduces_the_fixture_exactly ... ok
+test discover_all_is_byte_identical_no_matter_what_was_invoked_first ... ok
+test two_worlds_built_from_the_same_json_agree_byte_for_byte ... ok
+test the_scan_is_reproducible_across_tokio_worker_threads ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\ports.rs (E:\DevCache\cargo\target-dev\debug\deps\ports-7857a439cec18e33.exe)
+
+running 21 tests
+test a_caller_cannot_express_a_traversal_at_all ... ok
+test every_file_call_on_an_unavailable_provider_fails ... ok
+test inspect_returns_the_scripted_node_and_refuses_an_unknown_id ... ok
+test a_write_through_an_escaping_symlink_is_refused_and_writes_nothing ... ok
+test exec_on_an_unknown_resource_is_not_found ... ok
+test a_write_follows_a_symlink_to_its_resolved_target ... ok
+test a_write_is_visible_to_a_later_read_and_stat ... ok
+test exec_returns_the_scripted_outcome ... ok
+test exec_output_longer_than_the_cap_comes_back_truncated ... ok
+test health_reports_the_state_rather_than_failing_on_it ... ok
+test the_fake_refuses_what_the_kernel_refuses ... ok
+test list_returns_one_level_of_metadata_and_never_a_body ... ok
+test reading_a_metadata_only_file_is_an_error_not_empty_bytes ... ok
+test read_returns_exactly_the_requested_window ... ok
+test a_write_whose_parent_does_not_exist_is_refused ... ok
+test listing_a_file_or_a_missing_path_is_an_error ... ok
+test writing_to_a_read_only_directory_is_refused ... ok
+test discover_pages_until_the_cursor_runs_out ... ok
+test exec_refuses_a_zero_budget_and_an_uncovered_command ... ok
+test reading_a_directory_is_refused ... ok
+test shutdown_is_idempotent_and_leaves_discovery_untouched ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\world.rs (E:\DevCache\cargo\target-dev\debug\deps\world-66ab918d6ca84e1b.exe)
+
+running 40 tests
+test a_dangling_parent_and_a_parent_cycle_are_both_refused ... ok
+test a_canonical_path_outside_the_served_subtree_is_still_refused ... ok
+test a_repeated_key_and_a_repeated_identity_are_different_mistakes ... ok
+test a_declared_capability_still_does_not_invent_an_outcome ... ok
+test a_cursor_outside_the_world_is_refused_rather_than_answered_empty ... ok
+test a_destructive_refusal_comes_before_the_resource_lookup ... ok
+test a_read_only_ancestor_is_visible_through_the_whole_subtree ... ok
+test a_destructive_operation_without_force_is_refused_at_the_provider_boundary ... ok
+test a_relation_rides_with_the_page_holding_its_source ... ok
+test a_symlink_inside_the_subtree_resolves_to_its_target ... ok
+test an_exec_rule_must_declare_an_argv_and_a_known_resource ... ok
+test a_resource_declared_capability_set_is_a_ceiling ... ok
+test a_symlink_out_of_the_workspace_root_is_refused ... ok
+test an_empty_plugin_name_is_refused ... ok
+test an_empty_capability_list_means_no_declared_ceiling ... ok
+test an_unavailable_provider_reports_health_and_fails_every_other_call ... ok
+test an_unavailable_provider_without_a_scripted_code_still_fails_closed ... ok
+test an_unrecognised_schema_version_is_refused ... ok
+test an_undeclared_resource_is_reachable_by_no_rule_at_all ... ok
+test a_symlink_loop_is_refused_rather_than_followed_forever ... ok
+test an_unscripted_operation_is_an_error_rather_than_a_silent_success ... ok
+test contradictory_file_declarations_are_refused ... ok
+test exec_can_script_a_hard_failure ... ok
+test exec_output_is_capped_and_the_truncation_is_reported ... ok
+test error_codes_must_exist_in_the_shipped_registry ... ok
+test both_shapes_of_operation_failure_are_reproduced ... ok
+test every_built_in_world_loads_and_declares_what_it_promises ... ok
+test exec_refuses_a_zero_budget_and_an_unscripted_command ... ok
+test exec_rules_match_exact_argv_and_may_be_scoped_to_a_resource ... ok
+test fault_mode_3_delivers_the_earlier_pages_then_fails ... ok
+test file_entries_must_declare_a_real_parent_directory ... ok
+test operation_outcomes_must_be_terminal_and_carry_codes_only_on_failure ... ok
+test invoking_on_a_resource_the_fixture_never_declared_is_not_found ... ok
+test identity_is_derived_from_native_parts_not_from_the_display_name ... ok
+test fixture_declaration_order_does_not_change_the_serialized_world ... ok
+test pagination_delivers_every_resource_exactly_once ... ok
+test relations_must_name_declared_resources ... ok
+test resources_are_emitted_parent_first_with_siblings_in_derived_id_order ... ok
+test resource_metadata_and_capabilities_survive_loading ... ok
+test the_descriptor_reports_the_fixture_and_a_default_version ... ok
+
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_wasm_components-dd65087f7172e4b0.exe)
+
+running 17 tests
+test tests::every_expected_code_exists_in_the_shipped_error_registry ... ok
+test tests::every_fixture_has_a_manifest_entry_and_the_reverse ... ok
+test tests::fixture_names_and_files_are_unique ... ok
+test tests::derived_fixtures_differ_from_the_valid_one_only_where_intended ... ok
+test tests::manifest_and_code_agree_on_every_outcome ... ok
+test tests::no_sandtree_exports_fixture_is_a_standalone_component ... ok
+test tests::only_the_valid_fixture_is_expected_to_load ... ok
+test tests::reject_fixtures_drop_exactly_the_interface_they_are_about ... ok
+test wit_equivalence::tests::both_wit_files_declare_the_package_the_fixtures_use ... ok
+test wit_equivalence::tests::the_interface_export_names_match_the_wit_identity ... ok
+test wit_equivalence::tests::the_corpus_implements_exactly_the_declared_world ... ok
+test wit_equivalence::tests::the_rename_is_the_only_difference_and_it_is_real ... ok
+test tests::every_reject_fixture_reports_a_distinct_cause ... ok
+test tests::interface_names_derive_back_to_the_declared_package ... ok
+test wit_equivalence::tests::wit_copy_matches_design_file_modulo_the_rename ... ok
+test tests::manifest_paths_and_constants_resolve ... ok
+test tests::the_valid_fixture_exports_both_required_interfaces ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sandtree_mock_observation
+
+running 1 test
+test mock\observation\src\lib.rs - (line 21) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+   Doc-tests sandtree_mock_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sandtree_mock_wasm_components
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

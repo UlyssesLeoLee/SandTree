@@ -155,6 +155,46 @@ apps：`daemon`（IPC 服务 + EventPump + `--check` 自检）、`cli`、`plugin
 **留待下一阶段**：`tests/integration` 与 `tests/system` 仍在用自己那份手写 fake，
 尚未切换到 mock crate 引用。切换后那两份重复可删。
 
+## 5.1 回归工装与四道 Gate
+
+设计基线把 159 条测试用例分成 UT/IT/ST/UAT 四道 Gate，`tests/test_cases.json` 的
+`Status` / `Evidence` 两列至今全是 `Not Executed` / 空。该文件**只读**，所以执行证据落在
+`mock/` 下，由脚本产出、脚本复跑。
+
+| 文件 | 作用 |
+| --- | --- |
+| `mock/scripts/run_regression.ps1` | 跑六道 gate，写 `mock/evidence/runs/<ts>/`，再做覆盖自检 |
+| `mock/scripts/collect_evidence.py` | 读日志 + `case_map.csv` → 覆盖矩阵 + 汇总 + 报告 |
+| `mock/scripts/extract_test_inventory.py` | `cargo test -- --list` → 带 crate 归属的测试清单 |
+| `mock/scripts/case_map.csv` | 159 行「设计用例 → Rust 测试」人工策展映射 |
+| `mock/evidence/coverage_matrix.csv` | 每条用例的状态、映射测试、实际执行的测试 |
+| `mock/docs/REGRESSION.md` | 人读报告 |
+
+`case_map.csv` 是**刻意的人工策展文件**。设计用例说的是「操作者必须观察到 X」，
+Rust 测试说的是「代码保证 Y」，仓库里没有任何东西关联二者；从 requirement id 推断
+会产出一份看起来完整、实则什么都没断言的矩阵。脚本只负责执行它，不负责猜它。
+
+状态词汇刻意收窄：`PASS` / `FAIL` / `PARTIAL`（映射有笔误或测试被改名）/
+`UNMAPPED`（基线有用例但本仓无任何验证）/ `MANUAL`（设计要求人工验收）。
+
+**当前状态**：925 条测试，六道 gate 全绿，覆盖自检 925/925；153/159 条设计用例
+已完全映射且执行通过，0 FAIL、0 PARTIAL。剩下 6 条 UNMAPPED 是真实缺口，
+已在矩阵里逐条写明原因（取消传播、日志跟随取消、in-use 卷删除保护、UI 延迟、
+日志量、UI 认知负荷），其中 UI 类因本仓无 UI 层而不可自动化。
+
+工装本身在这一轮暴露并修掉了三类缺陷，都属于「门禁看起来在工作、其实没有」：
+
+- `CARGO_TARGET_DIR` 只在未设置时才赋值，于是环境里预设的值会让脚本冷构建另一棵树 ——
+  门禁验证的构建和开发时验证的不是同一个。
+- `Invoke-Gate` 用 `Write-Output` 打进度，PowerShell 会把函数里的一切都返回，
+  于是 `$c -ne 0` 拿到的是数组，**五道全绿的 gate 被报成五道失败**。
+- 三个 mock crate 自己的测试目标（约 177 条）不归属任何一道 gate，而整套回归都建立在
+  这些 fixture 上。补 `mock` gate 后，脚本再拿 `cargo test --workspace -- --list`
+  的结果和 gate 实际执行数对拍，**对不上就红**。
+
+最后一条是这套工装的核心判据：**门禁的输入集合必须由发现得出，不能由手写路径得出**。
+一条漏配的 gate 和一条全绿的 gate 输出完全一样。覆盖自检就是用来消除这个歧义的。
+
 
 ## 6. license 门禁（cargo-deny 的离线替代）
 

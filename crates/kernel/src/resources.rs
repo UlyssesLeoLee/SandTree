@@ -195,6 +195,15 @@ impl ResourceManager {
             }
 
             let mut seen: Vec<ResourceId> = Vec::new();
+            // Relations are buffered until the scan ends. A relation names two
+            // resources, and paging puts them wherever pre-order puts them --
+            // a relation on page 0 routinely points at a resource that page 1
+            // has not delivered yet. Writing them per page violated the
+            // `resource_relation` foreign keys and failed the whole discovery
+            // with `FOREIGN KEY constraint failed` for any provider whose
+            // relations crossed a page boundary. FR-061: a relation is only
+            // meaningful once both its endpoints exist.
+            let mut pending_relations: Vec<Relation> = Vec::new();
             let mut cursor: Option<String> = None;
             let mut pages = 0usize;
             loop {
@@ -222,12 +231,15 @@ impl ResourceManager {
                     }
                 };
                 seen.extend(batch.resources.iter().map(|n| n.id.clone()));
+                pending_relations.extend(batch.relations.iter().cloned());
                 all.extend(self.store.upsert_resources(&batch.resources)?);
-                self.store.upsert_relations(&batch.relations)?;
                 match batch.cursor {
                     Some(next) if !next.is_empty() => cursor = Some(next),
                     _ => {
-                        // The round completed, so this provider answered.
+                        // The round completed, so this provider answered, and
+                        // every endpoint those relations name is now in the
+                        // store.
+                        self.store.upsert_relations(&pending_relations)?;
                         seen.sort();
                         seen.dedup();
                         for id in &seen {

@@ -500,6 +500,7 @@ mod tests {
     use super::*;
     use sandtree_model::resource::ResourceState;
     use serde_json::json;
+    use std::collections::BTreeSet;
 
     const NOW: &str = "2026-10-07T00:00:00Z";
 
@@ -625,6 +626,95 @@ mod tests {
         );
         // All edges originate at the container.
         assert!(rels.iter().all(|r| r.from == node.id));
+    }
+
+    #[test]
+    fn named_volume_mounts_become_edges_and_bind_mounts_become_metadata() {
+        // UT-034 / FR-041: a container mount becomes a `mounts` relation. Only
+        // *named* volumes do, because a named volume is a resource this
+        // provider already reports and therefore a target the edge can point
+        // at honestly; a bind mount names a host path, which is a workspace
+        // concern (NFR-S06) and not a volume resource. Turning a bind mount
+        // into an edge would invent a resource the operator never created.
+        let mut fixture = base_container();
+        fixture["Mounts"] = json!([
+            { "Type": "volume", "Name": "pgdata",   "Source": "/var/lib/docker/volumes/pgdata/_data", "Destination": "/var/lib/postgresql/data", "RW": true },
+            { "Type": "volume", "Name": "cache",    "Source": "/var/lib/docker/volumes/cache/_data",  "Destination": "/var/cache",               "RW": true },
+            { "Type": "bind",   "Name": "",         "Source": "E:/work/src",                          "Destination": "/src",                     "RW": false },
+            { "Type": "tmpfs",  "Name": "",         "Source": "",                                    "Destination": "/tmp",                     "RW": false }
+        ]);
+        let (node, rels) = normalize_container(
+            &container_summary(fixture),
+            &ep(),
+            &plugin(),
+            &runtime(),
+            NOW,
+        );
+
+        let mut mounted: Vec<RelationKind> = rels.iter().map(|r| r.kind).collect();
+        mounted.sort();
+        mounted.dedup();
+        assert_eq!(
+            mounted,
+            vec![RelationKind::UsesImage, RelationKind::Mounts,],
+            "only the named volume produces an extra edge; bind and tmpfs do not \
+             (sorted by discriminant, so UsesImage precedes Mounts)"
+        );
+
+        let edges: Vec<&Relation> = rels
+            .iter()
+            .filter(|r| r.kind == RelationKind::Mounts)
+            .collect();
+        assert_eq!(edges.len(), 2, "one edge per named volume: {edges:?}");
+        // Volume identity is name + endpoint (DD-PLG §5), so two containers on
+        // two endpoints do not collide on a shared name.
+        for edge in &edges {
+            assert_eq!(
+                edge.from, node.id,
+                "every mount edge originates at the container"
+            );
+        }
+        let expected: BTreeSet<ResourceId> = ["pgdata", "cache"]
+            .iter()
+            .map(|name| resource_id(&ep(), NativeKind::Volume, name))
+            .collect();
+        let actual: BTreeSet<ResourceId> = edges.iter().map(|e| e.to.clone()).collect();
+        assert_eq!(
+            actual, expected,
+            "the edge targets are exactly the two named volumes, derived the \
+             same way `normalize_volume` derives them"
+        );
+        let targets: Vec<ResourceId> = edges.iter().map(|e| e.to.clone()).collect();
+        // Order follows the sorted *volume names*, not the sorted resource ids:
+        // `pgdata` and `cache` hash to unrelated ids, so "sorted by id" would
+        // only be true by accident. Asserting the name order is what actually
+        // pins the determinism guarantee (CONTRACTS §6).
+        let name_order: Vec<ResourceId> = ["cache", "pgdata"]
+            .iter()
+            .map(|name| resource_id(&ep(), NativeKind::Volume, name))
+            .collect();
+        assert_eq!(
+            targets, name_order,
+            "volume edges are emitted in sorted volume-name order; a reordering \
+             here would make the edge list unstable across runs"
+        );
+
+        // The bind source is recorded, not modelled as a volume.
+        let binds = node
+            .metadata
+            .get("bind_mount_sources")
+            .and_then(|v| v.as_array())
+            .expect("bind sources are recorded as metadata");
+        assert_eq!(
+            binds.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(),
+            vec!["E:/work/src"],
+            "exactly the bind mount's source, and nothing invented: {binds:?}"
+        );
+        assert!(
+            rels.iter()
+                .all(|r| r.kind != RelationKind::Mounts || !r.to.as_str().contains("E:")),
+            "a host path must never become a resource id"
+        );
     }
 
     #[test]

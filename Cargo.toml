@@ -27,6 +27,7 @@ members = [
     "tests/contract",
     "tests/integration",
     "tests/system",
+    "tests/uat",
     "mock/wasm-components",
 ]
 
@@ -56,6 +57,23 @@ sandtree-daemon = { path = "apps/daemon", version = "1.1.0" }
 sandtree-cli = { path = "apps/cli", version = "1.1.0" }
 sandtree-plugin-worker = { path = "apps/plugin-worker", version = "1.1.0" }
 sandtree-probe-windows = { path = "apps/probe-windows", version = "1.1.0" }
+
+# --- mock crates (test assets, never a product dependency) ---
+# These exist so the four test layers can run with no Docker daemon, no
+# Multipass install, no Windows Sandbox session and no wasm32 toolchain. They
+# may be depended on by test targets only; a contract test enforces that
+# crates/* never reaches for one.
+sandtree-mock-runtime = { path = "mock/runtime", version = "1.1.0" }
+sandtree-mock-observation = { path = "mock/observation", version = "1.1.0" }
+sandtree-mock-wasm-components = { path = "mock/wasm-components", version = "1.1.0" }
+
+# --- a provider crate, for tests that exercise its parsing directly ---
+# Nothing in the product depends on a provider: plugins are loaded at runtime
+# through the plugin host, so no crate links one. A test that wants to check
+# how provider-docker parses an endpoint has to depend on it, and going
+# through `workspace` keeps that one-off visible instead of hiding a path
+# dependency in a test manifest.
+sandtree-provider-docker = { path = "plugins/provider-docker", version = "1.1.0" }
 
 # --- MUST baseline (schemas/technology_baseline.csv) ---
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "signal", "net"] }

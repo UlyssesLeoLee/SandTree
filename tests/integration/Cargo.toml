@@ -25,3 +25,9 @@ async-trait.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+# Mock crates: a test-only fake that serves the same ports a real provider does,
+# so cross-crate flows can be driven with no Docker daemon, Multipass or
+# Windows Sandbox present. `crates/*` must never depend on these.
+sandtree-mock-runtime.workspace = true
+sandtree-mock-observation.workspace = true
