@@ -29,6 +29,15 @@
     ;; invoke ok: {"ok":true}
     (data (i32.const 192) "{\"ok\":true}")
 
+    ;; --- return areas ---
+    ;;
+    ;; One 4-aligned area per function, so two live results cannot alias:
+    ;;   256 descriptor (20B)   320 health (12B)     384 discover (12B)
+    ;;   448 inspect (12B)      512 invoke (12B)     576 result discriminant
+    ;;
+    ;; The host reads the area immediately after the call and the fixture never
+    ;; frees anything, so reusing the static areas is safe.
+
     ;; --- allocator ---
     ;;
     ;; The host lowers string parameters into this memory through `cabi_realloc`,
@@ -54,41 +63,46 @@
     ;; --- lifecycle ---
     ;;
     ;; descriptor(): record{plugin-id, version, state-schema-version}
-    (func (export "descriptor") (param $ret i32)
-      (local.get $ret) (i32.const 16)  (i32.store)
-      (local.get $ret) (i32.const 23)  (i32.store offset=4)
-      (local.get $ret) (i32.const 64)  (i32.store offset=8)
-      (local.get $ret) (i32.const 5)   (i32.store offset=12)
-      (local.get $ret) (i32.const 1)   (i32.store offset=16))
+    (func (export "descriptor") (result i32)
+      (i32.const 256) (i32.const 16) (i32.store)
+      (i32.const 256) (i32.const 23) (i32.store offset=4)
+      (i32.const 256) (i32.const 64) (i32.store offset=8)
+      (i32.const 256) (i32.const 5)  (i32.store offset=12)
+      (i32.const 256) (i32.const 1)  (i32.store offset=16)
+      (i32.const 256))
 
     ;; init(): always ok. The config is not inspected by design.
-    (func (export "init") (param $ptr i32) (param $len i32) (param $ret i32)
-      (local.get $ret) (i32.const 0) (i32.store))
+    (func (export "init") (param $config_ptr i32) (param $config_len i32) (result i32)
+      (i32.const 576) (i32.const 0) (i32.store)
+      (i32.const 576))
 
     ;; health(): ok("{\"state\":\"healthy\"}") -> ProviderHealth::Healthy
-    (func (export "health") (param $ret i32)
-      (local.get $ret) (i32.const 0)  (i32.store)
-      (local.get $ret) (i32.const 96) (i32.store offset=4)
-      (local.get $ret) (i32.const 20) (i32.store offset=8))
+    (func (export "health") (result i32)
+      (i32.const 320) (i32.const 0)  (i32.store)
+      (i32.const 320) (i32.const 96) (i32.store offset=4)
+      (i32.const 320) (i32.const 20) (i32.store offset=8)
+      (i32.const 320))
 
     ;; prepare-upgrade(): ok(empty list<u8>) - the mock has no state to carry.
     (func (export "prepare_upgrade")
-      (param $ptr i32) (param $len i32) (param $ret i32)
-      (local.get $ret) (i32.const 0) (i32.store)
-      (local.get $ret) (i32.const 0) (i32.store offset=4)
-      (local.get $ret) (i32.const 0) (i32.store offset=8))
+      (param $target_ptr i32) (param $target_len i32) (result i32)
+      (i32.const 576) (i32.const 0) (i32.store)
+      (i32.const 576) (i32.const 0) (i32.store offset=4)
+      (i32.const 576) (i32.const 0) (i32.store offset=8)
+      (i32.const 576))
 
     ;; accept-upgrade(): ok
     (func (export "accept_upgrade")
       (param $from_ptr i32) (param $from_len i32)
       (param $state_ptr i32) (param $state_len i32)
-      (param $ret i32)
-      (local.get $ret) (i32.const 0) (i32.store))
+      (result i32)
+      (i32.const 576) (i32.const 0) (i32.store)
+      (i32.const 576))
 
     ;; drain(): ok
-    (func (export "drain")
-      (param $deadline_lo i32) (param $deadline_hi i32) (param $ret i32)
-      (local.get $ret) (i32.const 0) (i32.store))
+    (func (export "drain") (param $deadline_ms i64) (result i32)
+      (i32.const 576) (i32.const 0) (i32.store)
+      (i32.const 576))
 
     ;; shutdown(): returns nothing at all.
     (func (export "shutdown"))
@@ -98,60 +112,90 @@
     ;; discover(): ok("[]")
     (func (export "discover")
       (param $cursor_disc i32) (param $cursor_ptr i32) (param $cursor_len i32)
-      (param $ret i32)
-      (local.get $ret) (i32.const 0)   (i32.store)
-      (local.get $ret) (i32.const 128) (i32.store offset=4)
-      (local.get $ret) (i32.const 2)   (i32.store offset=8))
+      (result i32)
+      (i32.const 384) (i32.const 0)   (i32.store)
+      (i32.const 384) (i32.const 128) (i32.store offset=4)
+      (i32.const 384) (i32.const 2)   (i32.store offset=8)
+      (i32.const 384))
 
     ;; inspect(): ok("{}")
-    (func (export "inspect") (param $id_ptr i32) (param $id_len i32) (param $ret i32)
-      (local.get $ret) (i32.const 0)   (i32.store)
-      (local.get $ret) (i32.const 160) (i32.store offset=4)
-      (local.get $ret) (i32.const 2)   (i32.store offset=8))
+    (func (export "inspect") (param $id_ptr i32) (param $id_len i32) (result i32)
+      (i32.const 448) (i32.const 0)   (i32.store)
+      (i32.const 448) (i32.const 160) (i32.store offset=4)
+      (i32.const 448) (i32.const 2)   (i32.store offset=8)
+      (i32.const 448))
 
     ;; invoke(): ok("{\"ok\":true}")
     (func (export "invoke")
       (param $id_ptr i32) (param $id_len i32)
       (param $op_ptr i32) (param $op_len i32)
       (param $payload_ptr i32) (param $payload_len i32)
-      (param $ret i32)
-      (local.get $ret) (i32.const 0)   (i32.store)
-      (local.get $ret) (i32.const 192) (i32.store offset=4)
-      (local.get $ret) (i32.const 11)  (i32.store offset=8))
+      (result i32)
+      (i32.const 512) (i32.const 0)   (i32.store)
+      (i32.const 512) (i32.const 192) (i32.store offset=4)
+      (i32.const 512) (i32.const 11)  (i32.store offset=8)
+      (i32.const 512))
   )
 
   (core instance $guest (instantiate $guest))
 
+  ;; --- named types ---
+  ;;
+  ;; These are the WIT types from `crates/plugin-host/wit/`, verbatim. They must
+  ;; be *named* and exported because a component may only export a function
+  ;; whose value types are named; wit-component does the same for every
+  ;; generated component.
+  (type $descriptor-record
+    (record
+      (field "plugin-id" string)
+      (field "version" string)
+      (field "state-schema-version" u32)))
+  (type $list-u8 (list u8))
+  (type $option-string (option string))
+  (type $result-unit-string (result (error string)))
+  (type $result-string-string (result string (error string)))
+  (type $result-list-u8-string (result $list-u8 (error string)))
+
   ;; --- component-level exports, one per WIT function ---
-  (func $descriptor (param i32)
+  ;;
+  ;; The type here is the WIT type verbatim, not the flattened core signature:
+  ;; `canon lift` checks the core function against this type's lowered form.
+  (func $descriptor (result $descriptor-record)
     (canon lift (core func $guest "descriptor")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $init (param i32 i32 i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $init (param "config-json" string) (result $result-unit-string)
     (canon lift (core func $guest "init")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $health (param i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $health (result $result-string-string)
     (canon lift (core func $guest "health")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $prepare_upgrade (param i32 i32 i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $prepare_upgrade
+    (param "target-version" string) (result $result-list-u8-string)
     (canon lift (core func $guest "prepare_upgrade")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $accept_upgrade (param i32 i32 i32 i32 i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $accept_upgrade
+    (param "from-version" string) (param "state" $list-u8)
+    (result $result-unit-string)
     (canon lift (core func $guest "accept_upgrade")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $drain (param i32 i32 i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $drain (param "deadline-ms" u64) (result $result-unit-string)
     (canon lift (core func $guest "drain")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
   (func $shutdown (canon lift (core func $guest "shutdown")))
 
-  (func $discover (param i32 i32 i32 i32)
+  (func $discover
+    (param "cursor" $option-string) (result $result-string-string)
     (canon lift (core func $guest "discover")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $inspect (param i32 i32 i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $inspect
+    (param "resource-id" string) (result $result-string-string)
     (canon lift (core func $guest "inspect")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
-  (func $invoke (param i32 i32 i32 i32 i32 i32 i32)
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+  (func $invoke
+    (param "resource-id" string) (param "operation" string) (param "payload-json" string)
+    (result $result-string-string)
     (canon lift (core func $guest "invoke")
-      (memory (memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
+      (memory (core memory $guest "memory")) (realloc (core func $guest "cabi_realloc")) string-encoding=utf8))
 
   ;; --- the two WIT interfaces: `lifecycle` is exported ... ---
   (instance $lifecycle
@@ -169,6 +213,15 @@
     (export "discover" (func $discover))
     (export "inspect" (func $inspect))
     (export "invoke" (func $invoke)))
+
+  ;; --- the named types the exported functions refer to ---
+  ;;     (a component must export the names its exported functions use)
+  (export "descriptor-record" (type $descriptor-record))
+  (export "list-u8" (type $list-u8))
+  (export "option-string" (type $option-string))
+  (export "result-unit-string" (type $result-unit-string))
+  (export "result-string-string" (type $result-string-string))
+  (export "result-list-u8-string" (type $result-list-u8-string))
 
   (export "sandtree:plugin/lifecycle@1.0.0" (instance $lifecycle))
 )

@@ -45,9 +45,9 @@ fn engine() -> Result<Engine, String> {
 pub fn compile(wat: &str) -> Result<Vec<u8>, String> {
     let engine = engine()?;
     Component::new(&engine, wat)
-        .map_err(|e| format!("{e}"))?
+        .map_err(|e| format!("{e:?}"))?
         .serialize()
-        .map_err(|e| format!("{e}"))
+        .map_err(|e| format!("{e:?}"))
 }
 
 /// The top-level export names of a compiled component, sorted.
@@ -57,7 +57,7 @@ pub fn compile(wat: &str) -> Result<Vec<u8>, String> {
 /// test that depended on one would be testing wasmtime, not the fixture.
 pub fn top_level_exports(wat: &str) -> Result<Vec<String>, String> {
     let engine = engine()?;
-    let component = Component::new(&engine, wat).map_err(|e| format!("{e}"))?;
+    let component = Component::new(&engine, wat).map_err(|e| format!("{e:?}"))?;
     let mut names: Vec<String> = component
         .component_type()
         .exports(&engine)
@@ -73,7 +73,7 @@ pub fn top_level_exports(wat: &str) -> Result<Vec<String>, String> {
 /// something, and there is no host in a regression corpus.
 pub fn imports(wat: &str) -> Result<Vec<String>, String> {
     let engine = engine()?;
-    let component = Component::new(&engine, wat).map_err(|e| format!("{e}"))?;
+    let component = Component::new(&engine, wat).map_err(|e| format!("{e:?}"))?;
     let mut names: Vec<String> = component
         .component_type()
         .imports(&engine)
