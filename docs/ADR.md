@@ -420,3 +420,26 @@ gen999 的端口包塞进来当 gen7 用。kernel 的 `ProviderRegistry` 随之�
    `LoadedGeneration::lifecycle_only` 正是为这个中间态准备的。
 3. in-process Rust provider 与 WASM 组件的**生成号分配**仍未统一：前者由调用方指定，后者由
    `ClusterPlanner::first_generation()` 给出。
+### ADR-016 补记：自审在接线后又查出两个 generation 泄漏
+
+ADR-016 落地后对同一块代码做了一轮自审，查出两个**资源泄漏**——都属「代被挤出路由表后没人退役」这一类，
+在 WASM generation 上的后果是 guest 的 `lifecycle.shutdown` 永不执行。
+
+**缺陷 1：对已安装插件重复 `plugin.install` 会泄漏旧代。**
+`supervisor.install` 其实把被挤出的代放在了 `SwapResult::retired` 里，但 `PluginControl::install`
+直接丢弃了整个 `SwapResult`。变异验证确认：去掉守卫前，第二次 install 会**成功**
+（`swapped: true, generation: gen2`，`drained: false`），留下一个既没 drain 也没 shutdown 的
+gen1，且回滚把手一并丢失。
+**修法不是补 drain，而是让误用在源头不可达**：`install` 在插件已有 serving 代时直接拒绝，
+并指名 `plugin.hotswap`。这样 install 与 hotswap 互为对称守卫——各自在错误状态下拒绝并指向对方。
+
+**缺陷 2：并发 swap 时被挤出的那一代会泄漏。**
+`publish` 里有两个代：`previous`（supervisor 迁移来源，回滚目标）与 `rolled`（路由表实际挤出的）。
+正常情况下二者同一个；但**同一插件的两个并发 swap** 会让它们不同——调用方读到路由后、原子写之前，
+另一条 swap 抢先落地。原代码 drain 了 `previous` 后把 `retired` 覆盖成它，`rolled` 就此失联：
+既没人路由，也没人退役。
+**修法**：凡是不作为回滚目标交还的挤出代，一律 drain + shutdown，并打 warn 日志说明是并发所致。
+判据是「谁被交还」而不是「谁先被读到」。
+
+**门禁**　`installing_over_a_live_plugin_is_refused_and_names_the_right_method`、
+`a_generation_displaced_by_a_racing_swap_is_still_retired`，两条均经变异验证（去掉修法立刻变红）。

@@ -137,11 +137,28 @@ impl PluginControl {
     }
 
     /// `plugin.install` — first load of a plugin.
+    ///
+    /// Refuses when the plugin is already serving, and names
+    /// [`PluginControl::hotswap`] instead. Silently treating a second install as
+    /// an upgrade would displace the live generation without draining it, so a
+    /// WASM guest's `lifecycle.shutdown` would never run and the rollback handle
+    /// would be dropped on the floor. Refusing makes the misuse unreachable
+    /// rather than papering over the consequences.
     pub async fn install(
         &self,
         plugin: &PluginId,
         config: &Json,
     ) -> Result<SwapResult, DomainError> {
+        if self.routes.current_generation(plugin).is_some() {
+            return Err(DomainError::new(
+                ErrorCode::PLUGIN_HOTSWAP_REJECTED,
+                format!(
+                    "plugin {plugin} is already installed; use plugin.hotswap to \
+                     move it to a new generation"
+                ),
+            ));
+        }
+
         let generation = self.next_generation(plugin);
         let staged = self.loader.stage(plugin, generation).await?;
         Ok(self.supervisor.install(plugin, staged, config).await)
@@ -333,6 +350,37 @@ mod tests {
 
     fn failing_loader() -> Arc<dyn PluginLoader> {
         Arc::new(FixedLoader { init_fails: true })
+    }
+
+    #[tokio::test]
+    async fn installing_over_a_live_plugin_is_refused_and_names_the_right_method() {
+        // The defect this guards: `supervisor.install` returns the displaced
+        // generation in `SwapResult::retired`, and an install path that ignored
+        // it would drop the last `Arc` of a live WASM generation — no drain, no
+        // `lifecycle.shutdown`, and no rollback handle. Refusing is what keeps
+        // that unreachable.
+        let (routes, c) = control(loader());
+        c.install(&plugin(), &Json::Null)
+            .await
+            .expect("first install");
+
+        let err = c
+            .install(&plugin(), &Json::Null)
+            .await
+            .expect_err("already installed");
+
+        assert_eq!(err.code, ErrorCode::PLUGIN_HOTSWAP_REJECTED);
+        assert!(err.message.contains("plugin.hotswap"), "{}", err.message);
+        assert_eq!(
+            routes.current_generation(&plugin()),
+            Some(Generation(1)),
+            "a refused install must not disturb the serving generation"
+        );
+        assert_eq!(
+            c.rollback_target(&plugin()).await,
+            None,
+            "a refused install must not invent a rollback target"
+        );
     }
 
     #[tokio::test]

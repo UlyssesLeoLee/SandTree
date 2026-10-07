@@ -351,7 +351,15 @@ impl HotSwapSupervisor {
         );
 
         // --- post-swap: the new generation already owns traffic ---
-        let mut retired = rolled;
+        //
+        // Two generations can be involved here, and only one of them can be the
+        // rollback target. `previous` is what the supervisor migrated from, so it
+        // is authoritative for rollback; `rolled` is what the route table
+        // actually displaced. They are the same generation in the normal case,
+        // but two concurrent swaps on one plugin can make them differ — and
+        // then the displaced generation that is *not* handed back still has to
+        // be retired, or it stays resident with nothing routing to it.
+        let mut retired: Option<Arc<LoadedGeneration>> = None;
         if let Some(old) = previous {
             if let Err(e) = old.runtime().drain(self.drain_deadline_ms).await {
                 // The new generation is live and healthy, so a drain timeout is
@@ -366,10 +374,23 @@ impl HotSwapSupervisor {
             old.runtime().shutdown().await;
             trace.drained = true;
             trace.step("drain");
-            // The caller-supplied previous generation is authoritative: it is
-            // the instance the supervisor actually migrated from, so it is what
-            // a rollback must restore.
             retired = Some(old);
+        }
+
+        if let Some(rolled) = rolled {
+            let already_retired = retired
+                .as_ref()
+                .is_some_and(|kept| kept.generation() == rolled.generation());
+            if !already_retired {
+                tracing::warn!(
+                    correlation_id = %correlation_id,
+                    plugin = %plugin,
+                    displaced = %rolled.generation(),
+                    "a concurrent swap displaced a different generation; retiring it"
+                );
+                let _ = rolled.runtime().drain(self.drain_deadline_ms).await;
+                rolled.runtime().shutdown().await;
+            }
         }
 
         SwapResult {
@@ -952,6 +973,54 @@ mod tests {
         let retired = r.retired.expect("the displaced generation is handed back");
         assert_eq!(retired.generation(), Generation(1));
         assert_eq!(retired.ports().generation, 1);
+    }
+
+    #[tokio::test]
+    async fn a_generation_displaced_by_a_racing_swap_is_still_retired() {
+        // `previous` (what the supervisor migrated from) and `rolled` (what the
+        // route actually displaced) are the same generation normally. A second
+        // swap landing between the caller reading the route and the atomic write
+        // makes them differ — and the displaced generation that is not handed
+        // back for rollback must still be shut down. Otherwise it stays
+        // resident with nothing routing to it and no handle to retire it.
+        let (routes, s) = sup();
+        let mut racing_rt = FakeRuntime::new(3, "3.0.0", 3);
+        Arc::get_mut(&mut racing_rt).unwrap().version = "3.0.0".to_string();
+        let racing = gen(racing_rt.clone());
+
+        // The route is serving gen3 by the time our swap writes.
+        routes.atomic_swap(&pid(), racing.clone());
+
+        let old_rt = FakeRuntime::new(1, "1.0.0", 1);
+        let old = gen(old_rt.clone());
+        let new_rt = FakeRuntime::new(2, "2.0.0", 2);
+        let new = gen(new_rt.clone());
+
+        let r = s
+            .swap(&pid(), new, old.clone(), StateMigration::None, &Json::Null)
+            .await;
+
+        assert!(r.outcome.swapped);
+        assert_eq!(routing_generation(&routes), Some(Generation(2)));
+        // The generation we migrated from is what a rollback restores.
+        assert_eq!(
+            r.retired.as_ref().map(|g| g.generation()),
+            Some(Generation(1))
+        );
+        assert_eq!(
+            old_rt.shutdowns(),
+            1,
+            "the migrated-from generation is drained and shut down"
+        );
+        assert_eq!(
+            racing_rt.shutdowns(),
+            1,
+            "the racing generation must not be left resident"
+        );
+    }
+
+    fn routing_generation(routes: &RouteTable) -> Option<Generation> {
+        routes.current_generation(&pid())
     }
 
     #[tokio::test]

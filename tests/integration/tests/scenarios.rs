@@ -722,12 +722,12 @@ mod ipc_surface {
     }
 
     /// An unimplemented method fails loudly instead of pretending to work.
-///
-/// Uses `snapshot.create`, not `plugin.hotswap`. The plugin lifecycle methods
-/// left the `not_served` list in ADR-016; pointing this test at one of them
-/// would have kept passing for the wrong reason until it started failing for
-/// the right one.
-#[tokio::test]
+    ///
+    /// Uses `snapshot.create`, not `plugin.hotswap`. The plugin lifecycle methods
+    /// left the `not_served` list in ADR-016; pointing this test at one of them
+    /// would have kept passing for the wrong reason until it started failing for
+    /// the right one.
+    #[tokio::test]
     async fn an_unimplemented_method_says_so_explicitly() {
         let dir = tempfile::tempdir().unwrap();
         let d = Daemon::start(DaemonConfig {
