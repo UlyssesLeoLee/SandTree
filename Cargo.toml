@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/model",
+    "mock/observation",
     "crates/observation-model",
     "crates/policy",
     "crates/event",

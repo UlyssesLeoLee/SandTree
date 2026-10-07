@@ -1,0 +1,187 @@
+{
+  "schema": "sandtree.mock.observation.v1",
+  "source": "mock-probe",
+  "resources": [
+    {
+      "resource": ["mock", "wsb-healthy"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "process", "filesystem", "network", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "hostname": "wsb-healthy", "uptime_s": 120 },
+        "process": { "count": 2, "pids": [1, 42] },
+        "filesystem": { "entries": ["workspace/src/lib.rs", "workspace/src/main.rs"], "hash_state": "metadata_known" },
+        "network": { "listeners": [80, 443] }
+      },
+      "trust": "guest_probe",
+      "health": "healthy",
+      "attach_evidence": true,
+      "observed_at": "2026-10-07T00:00:00Z",
+      "collector_version": "probe/1"
+    },
+    {
+      "resource": ["mock", "wsb-probe-dead"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "hostname": "wsb-probe-dead" }
+      },
+      "trust": "guest_probe",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "collector_version": "probe/1",
+      "fault": {
+        "kind": "probe_bootstrap_failed",
+        "reason": "bridge handshake refused: no telemetry channel"
+      }
+    },
+    {
+      "resource": ["mock", "wsb-partial"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "process", "filesystem", "health"],
+      "mode_domains": {
+        "metadata": ["system", "health"]
+      },
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "hostname": "wsb-partial" },
+        "process": { "count": 1, "pids": [1] },
+        "filesystem": { "entries": ["workspace/README.md"], "hash_state": "metadata_known" }
+      },
+      "trust": "guest_probe",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "fault": {
+        "kind": "partial_coverage",
+        "missing_domains": ["process", "filesystem"]
+      }
+    },
+    {
+      "resource": ["mock", "wsb-stale"],
+      "modes": ["metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "hostname": "wsb-stale", "uptime_s": 900 }
+      },
+      "trust": "host_native",
+      "health": "stale",
+      "freshness_ms": 300000,
+      "observed_at": "2026-10-07T00:00:00Z"
+    },
+    {
+      "resource": ["mock", "wsb-envelope-rejected"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64" }
+      },
+      "trust": "guest_probe",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "fault": {
+        "kind": "invalid_envelope",
+        "reason": "sequence 4 is not greater than the session sequence 7"
+      }
+    },
+    {
+      "resource": ["mock", "wsb-path-escape"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "filesystem", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64" },
+        "filesystem": { "entries": ["workspace/ok.txt", "../outside/taken.txt"] }
+      },
+      "trust": "guest_probe",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "fault": {
+        "kind": "guest_path_escape",
+        "path": "../outside/taken.txt"
+      }
+    },
+    {
+      "resource": ["mock", "wsb-trust-upgrade-attempt"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "claim": "host-authoritative" }
+      },
+      "trust": "host_native",
+      "health": "healthy",
+      "attach_evidence": true,
+      "observed_at": "2026-10-07T00:00:00Z"
+    },
+    {
+      "resource": ["mock", "wsb-ceiling-raised"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "claim": "probe-is-authoritative" }
+      },
+      "trust": "guest_probe",
+      "declared_ceiling": "host_native",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z"
+    },
+    {
+      "resource": ["mock", "wsb-subcollector-degraded"],
+      "modes": ["probe", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "windows", "arch": "x86_64", "hostname": "wsb-subcollector-degraded" }
+      },
+      "trust": "guest_probe",
+      "health": "degraded",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "collector_version": "probe/2"
+    },
+    {
+      "resource": ["mock", "multipass-deadline"],
+      "modes": ["exec", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "ubuntu", "arch": "x86_64", "hostname": "multipass-deadline" }
+      },
+      "trust": "remote_exec",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "fault": {
+        "kind": "deadline_exceeded",
+        "reason": "collector did not answer the process query",
+        "deadline_ms": 2000
+      }
+    },
+    {
+      "resource": ["mock", "multipass-credential-denied"],
+      "modes": ["exec", "metadata"],
+      "domains": ["system", "health"],
+      "values": {
+        "system": { "os": "ubuntu", "arch": "x86_64", "hostname": "multipass-credential-denied" }
+      },
+      "trust": "remote_exec",
+      "health": "healthy",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "fault": {
+        "kind": "credential_denied",
+        "reason": "instance ssh key is not present in the credential store"
+      }
+    },
+    {
+      "resource": ["mock", "docker-nested-down"],
+      "modes": ["native", "metadata"],
+      "domains": ["system", "docker", "health"],
+      "mode_domains": {
+        "metadata": ["system", "health"]
+      },
+      "values": {
+        "system": { "os": "linux", "arch": "aarch64", "hostname": "docker-nested-down" },
+        "docker": { "engine": "nested", "containers": [] }
+      },
+      "trust": "provider_native",
+      "health": "degraded",
+      "observed_at": "2026-10-07T00:00:00Z",
+      "fault": {
+        "kind": "nested_docker_unavailable",
+        "reason": "nested engine pipe closed after bootstrap"
+      }
+    }
+  ]
+}
