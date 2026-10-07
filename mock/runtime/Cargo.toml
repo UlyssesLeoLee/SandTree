@@ -1,0 +1,21 @@
+[package]
+name = "sandtree-mock-runtime"
+description = "Deterministic scripted control-plane fake: ResourceProvider/FileProvider/ExecProvider over a JSON world (mock project lane A, NFR-O04)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+sandtree-model.workspace = true
+sandtree-observation-model.workspace = true
+sandtree-sdk.workspace = true
+sandtree-vfs.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
