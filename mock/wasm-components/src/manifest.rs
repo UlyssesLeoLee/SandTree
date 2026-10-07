@@ -108,11 +108,7 @@ impl Manifest {
     pub fn expectation_of(&self, entry: &Entry) -> Expectation {
         match &entry.expected_outcome {
             Outcome::Accept => Expectation::Accept,
-            Outcome::Reject { code, at } => Expectation::Reject {
-                code,
-                at,
-                why: "",
-            },
+            Outcome::Reject { code, at } => Expectation::Reject { code, at, why: "" },
         }
     }
 }
@@ -136,9 +132,7 @@ pub const fn const_named(name: &str) -> Option<&'static str> {
         b"VALID_PROVIDER_COMPONENT_WAT" => Some(crate::fixtures::VALID_PROVIDER_COMPONENT_WAT),
         b"WRONG_PACKAGE_NAME_WAT" => Some(crate::fixtures::WRONG_PACKAGE_NAME_WAT),
         b"MISSING_REQUIRED_EXPORT_WAT" => Some(crate::fixtures::MISSING_REQUIRED_EXPORT_WAT),
-        b"INTERFACE_VERSION_MISMATCH_WAT" => {
-            Some(crate::fixtures::INTERFACE_VERSION_MISMATCH_WAT)
-        }
+        b"INTERFACE_VERSION_MISMATCH_WAT" => Some(crate::fixtures::INTERFACE_VERSION_MISMATCH_WAT),
         b"NO_SANDTREE_EXPORTS_WAT" => Some(crate::fixtures::NO_SANDTREE_EXPORTS_WAT),
         _ => None,
     }

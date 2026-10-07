@@ -31,7 +31,8 @@ use crate::fixtures::{Fixture, LIFECYCLE_INTERFACE_1, RESOURCE_PROVIDER_INTERFAC
 pub const DESIGN_WIT: &str = include_str!("../../../schemas/sandtree_provider_v1.wit");
 
 /// The parse-legal copy `wasmtime::component::bindgen!` actually reads.
-pub const LOCAL_WIT: &str = include_str!("../../../crates/plugin-host/wit/sandtree_provider_v1.wit");
+pub const LOCAL_WIT: &str =
+    include_str!("../../../crates/plugin-host/wit/sandtree_provider_v1.wit");
 
 /// The name ADR-004 renames `descriptor` to.
 pub const RENAMED_RECORD: &str = "descriptor-record";
@@ -102,7 +103,10 @@ fn interface_functions(src: &str, interface: &str) -> Vec<String> {
 fn interfaces_of(src: &str) -> Vec<String> {
     normalize(src, false)
         .into_iter()
-        .filter_map(|l| l.strip_prefix("interface ").map(|r| r.trim_end_matches(" {").to_string()))
+        .filter_map(|l| {
+            l.strip_prefix("interface ")
+                .map(|r| r.trim_end_matches(" {").to_string())
+        })
         .collect()
 }
 
@@ -154,8 +158,7 @@ mod tests {
             "the local WIT copy must carry the ADR-004 rename"
         );
         assert!(
-            DESIGN_WIT.contains("record descriptor {")
-                && !DESIGN_WIT.contains(RENAMED_RECORD),
+            DESIGN_WIT.contains("record descriptor {") && !DESIGN_WIT.contains(RENAMED_RECORD),
             "the frozen design WIT must still carry the colliding name"
         );
         assert_ne!(normalize(DESIGN_WIT, false), normalize(LOCAL_WIT, false));

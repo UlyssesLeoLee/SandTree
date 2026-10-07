@@ -214,13 +214,15 @@ impl Fixture {
             Fixture::ValidProviderComponent => {
                 &[LIFECYCLE_INTERFACE_1, RESOURCE_PROVIDER_INTERFACE_1]
             }
-            Fixture::WrongPackageName => {
-                &["evil:plugin/lifecycle@1.0.0", "evil:plugin/resource-provider@1.0.0"]
-            }
+            Fixture::WrongPackageName => &[
+                "evil:plugin/lifecycle@1.0.0",
+                "evil:plugin/resource-provider@1.0.0",
+            ],
             Fixture::MissingRequiredExport => &[LIFECYCLE_INTERFACE_1],
-            Fixture::InterfaceVersionMismatch => {
-                &["sandtree:plugin/lifecycle@2.0.0", "sandtree:plugin/resource-provider@2.0.0"]
-            }
+            Fixture::InterfaceVersionMismatch => &[
+                "sandtree:plugin/lifecycle@2.0.0",
+                "sandtree:plugin/resource-provider@2.0.0",
+            ],
             Fixture::NoSandTreeExports => &["ping"],
         }
     }
@@ -254,7 +256,10 @@ impl Fixture {
 
     /// Whether the fixture is a deliberate deviation from the valid one.
     pub const fn is_derived(&self) -> bool {
-        !matches!(self, Fixture::ValidProviderComponent | Fixture::NoSandTreeExports)
+        !matches!(
+            self,
+            Fixture::ValidProviderComponent | Fixture::NoSandTreeExports
+        )
     }
 }
 

@@ -63,10 +63,7 @@ fn every_fixture_has_a_manifest_entry_and_the_reverse() {
         "manifest and fixture enum disagree on how many fixtures there are"
     );
     for f in Fixture::ALL {
-        assert!(
-            m.entry(f).is_some(),
-            "manifest has no entry for {f}"
-        );
+        assert!(m.entry(f).is_some(), "manifest has no entry for {f}");
     }
     for e in &m.fixtures {
         assert!(
@@ -89,9 +86,17 @@ fn manifest_paths_and_constants_resolve() {
     for e in &m.fixtures {
         let f = manifest::fixture_named(&e.id).expect("known id");
         assert_eq!(e.file, f.file(), "manifest path for {} is stale", e.id);
-        assert_eq!(e.r#const, manifest::const_name(f), "constant name for {}", e.id);
+        assert_eq!(
+            e.r#const,
+            manifest::const_name(f),
+            "constant name for {}",
+            e.id
+        );
         let text = manifest::const_named(&e.r#const).unwrap_or_else(|| {
-            panic!("manifest names a constant that does not exist: {}", e.r#const)
+            panic!(
+                "manifest names a constant that does not exist: {}",
+                e.r#const
+            )
         });
         // The constant must be the file's text, not a second copy that can rot.
         assert_eq!(
@@ -130,7 +135,7 @@ fn manifest_and_code_agree_on_every_outcome() {
                 !code.is_empty() && !at.is_empty(),
                 "entry {} must name a stable code and a check",
                 e.id
-                );
+            );
         } else {
             assert_eq!(e.expected_outcome, Outcome::Accept);
             assert!(e.expected_code.is_none() && e.rejected_at.is_none());
@@ -170,7 +175,9 @@ fn every_expected_code_exists_in_the_shipped_error_registry() {
     let registry = include_str!("../../../schemas/error_codes.csv");
     let m = manifest::manifest();
     for f in Fixture::ALL {
-        let Some(code) = f.expectation().code() else { continue };
+        let Some(code) = f.expectation().code() else {
+            continue;
+        };
         assert!(
             registry.lines().any(|l| l.starts_with(code)),
             "{} expects {code}, which is not in schemas/error_codes.csv",
@@ -209,7 +216,11 @@ fn derived_fixtures_differ_from_the_valid_one_only_where_intended() {
         let mut other_only: Vec<&String> = other.iter().filter(|l| !valid.contains(l)).collect();
         valid_only.sort();
         other_only.sort();
-        assert_eq!(valid_only, vec![&expected_from.to_string()], "{f}: unexpected extra lines");
+        assert_eq!(
+            valid_only,
+            vec![&expected_from.to_string()],
+            "{f}: unexpected extra lines"
+        );
         assert_eq!(other_only.len(), 1, "{f}: unexpected changed lines");
         assert_eq!(other_only[0], &expected_to, "{f}: wrong change");
     }
@@ -257,8 +268,18 @@ fn interface_names_derive_back_to_the_declared_package() {
             .filter_map(|e| package_of(e).map(String::from))
             .next();
         match f.declared_package() {
-            None => assert_eq!(derived, None, "{} claims no package but derives one", f.name()),
-            Some(p) => assert_eq!(derived.as_deref(), Some(p), "{} derives a different package", f.name()),
+            None => assert_eq!(
+                derived,
+                None,
+                "{} claims no package but derives one",
+                f.name()
+            ),
+            Some(p) => assert_eq!(
+                derived.as_deref(),
+                Some(p),
+                "{} derives a different package",
+                f.name()
+            ),
         }
     }
 }
@@ -273,7 +294,9 @@ fn the_valid_fixture_exports_both_required_interfaces() {
         .expected_exports()
         .contains(&crate::fixtures::RESOURCE_PROVIDER_INTERFACE_1));
     assert!(v.wat().contains(crate::fixtures::LIFECYCLE_INTERFACE_1));
-    assert!(v.wat().contains(crate::fixtures::RESOURCE_PROVIDER_INTERFACE_1));
+    assert!(v
+        .wat()
+        .contains(crate::fixtures::RESOURCE_PROVIDER_INTERFACE_1));
 }
 
 #[test]
@@ -325,6 +348,10 @@ fn fixture_names_and_files_are_unique() {
             "{} does not look like a component",
             f.name()
         );
-        assert!(f.wat().lines().count() > 5, "{} is suspiciously short", f.name());
+        assert!(
+            f.wat().lines().count() > 5,
+            "{} is suspiciously short",
+            f.name()
+        );
     }
 }
