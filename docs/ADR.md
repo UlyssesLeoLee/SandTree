@@ -141,3 +141,47 @@ payload 中的 `action` 与审计记录一致，两者不允许对「执行了�
 
 **规则**　新增测试禁止恒真断言（`assert!(x || !x)`、`assert!(n >= 0)` 等）；每条新断言须能
 指出「若实现坏了，它会怎么红」。
+
+---
+
+## ADR-011 唯一一条依赖活 runtime 的测试移出默认门禁
+
+**背景**　`plugins/provider-docker` 的 `health_reports_a_usable_engine_as_healthy`
+是全仓唯一一条真正连活的 Docker Engine 的测试（其余用默认命名管道的用例都
+不做 IO：构造、`runtime_node`、`resolve_target`；所有降级测试则指向一个
+不可能存在的管道）。本轮它红了 —— 不是因为代码坏了，而是本机 daemon 停了，
+provider 正确地报了 `unavailable`，而测试要求 `healthy`。
+
+**决策**　标 `#[ignore = "requires a running Docker Engine on the default named pipe"]`，
+并在注释里写明在 daemon 可用的机器上用 `cargo test --workspace -- --ignored` 运行。
+不删、不弱化。
+
+**理由**　因为一个后台服务停了就变红的门禁不是门禁。但这条测试是真实覆盖 ——
+它是「provider 永远降级」与「provider 真的能用」之间唯一的分界，删掉等于放弃
+这条断言。标 ignore 同时把「默认门禁可复现」和「有 Docker 时这条覆盖仍然可达」
+两件事都保住了。
+
+**规则**　单元测试不得隐式依赖外部 runtime 处于运行状态。确实需要活 runtime 的，
+必须显式标记并给出运行命令；同一 crate 内的其余路径应保持与 runtime 无关，
+这样「进程没装 Docker」和「Docker 停机」都不影响默认门禁。
+
+---
+
+## ADR-012 并行 lane 的产出由门禁裁决，不由子代理的完成声明裁决
+
+**背景**　三个 mock crate 由三条 git worktree lane 并行产出。子代理通道本轮
+10 次派发有 9 次 `net::ERR_CONNECTION_RESET`，磁盘上的 commit 存活而报告丢失。
+更关键的是：三个 lane 交付时**全部是红的**，其中 `mock/runtime` 的
+`discover_all` 存在无法终止的无限循环（堆到分配器失败 288MB），
+`mock/wasm-components` 则从未编译过。
+
+**决策**　每条 lane 在 merge 前必须由主线亲自跑完整门禁（fmt / clippy / all-targets /
+test / license），并逐条核对失败项是「实现错」还是「测试期望错」，后者按文档规则改正。
+lane 内保留 checkpoint commit，避免通道断线时丢失工作。
+
+**后果**　隐藏缺陷的分布印证了这个判断：`tests/world.rs` 的 5 条失败从未在任何一次
+早期门禁里出现过 —— 套件在它之前就中止了。「跑过」与「跑全过」是两件事。
+
+**规则**　报告「某部分已验证」时，写的是**实际跑过的门禁**，不是仓库拥有的门禁。
+未执行到的测试目标必须显式说明。
+

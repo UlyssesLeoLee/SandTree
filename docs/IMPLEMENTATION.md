@@ -117,15 +117,44 @@ apps：`daemon`（IPC 服务 + EventPump + `--check` 自检）、`cli`、`plugin
 把它们换成真断言后，其中一条立刻变红，并牵出上面第 9 条的审计缺陷 —— 说明它们一直在
 「通过」的同时什么都没验。**新增测试禁止恒真断言**。
 
-## 5. mock 项目（并行 lane）
+## 5. mock 项目
 
-`mock/LANES.md` 是 lane 契约。三条 lane 各自独立 worktree + 独立 `CARGO_TARGET_DIR`：
+三个 mock crate 已合入 `dev`，让全栈在零真实 runtime 下可跑回归。
+详见 `mock/README.md`（面向使用者）。本节只记录**本轮为此改动了什么**。
 
-| Lane | 目录 | 解决的问题 |
+| crate | 解决的问题 | 测试数 |
 | --- | --- | --- |
-| A | `mock/runtime/` | 收敛 `tests/integration` 的 `Fake` 与 `tests/system` 的 `World` 两份重复 fake |
-| B | `mock/observation/` | 观测面零回归：ADR-OBS-001 / ADR-OBS-003 的故障注入 |
-| C | `mock/wasm-components/` | 无 wasm32 target → WAT fixture 覆盖 component 加载路径 |
+| `mock/runtime` | 收敛 `tests/integration` 的 `Fake` 与 `tests/system` 的 `World` 两份重复 fake | 77 |
+| `mock/observation` | 观测面零回归：ADR-OBS-001 / ADR-OBS-003 的故障注入 | 81 |
+| `mock/wasm-components` | 无 wasm32 target → WAT fixture 覆盖 component 加载路径 | 24 |
+
+三条 mock crate 由三条 git worktree lane 并行产出，各自独立 `CARGO_TARGET_DIR`
+（共享目录会让 4 个 cargo 进程抢同一把包缓存锁，并行退化为串行），
+逐条 rebase 后串行 merge 进 `dev`。脚手架（lane 驱动脚本、临时 runner）
+未随代码进仓。
+
+**并行产出必须由门禁裁决，不由子代理的「完成」声明裁决。** 本轮三个 lane
+交付的代码在第一次跑门禁时全部是红的，其中隐藏的缺陷包括：
+
+- `discover_all` 无法终止：provider 用 `cursor: None` 表示扫描结束时循环没有退出分支，
+  而 `None` 同时是扫描的起始游标，于是从第一页重新开始无限翻页，堆到分配器失败（288MB）。
+  模块文档当时已经承诺「loop cannot hang」。
+- symlink 解析把 base 目录算了两遍，`workspace/app/ok.txt` 解析成 `workspace/workspace/app/ok.txt`。
+- 工作区根目录无法列举：根条目 `parent_path()` 是 `None` 而过滤条件问的是 `Some("")`，
+  于是列根返回空、列任何子目录都正常。
+- 三个校验 fixture 生成了重复 JSON key，测试断言的是解析错误而不是它们名字里的那条规则。
+- `LARGE_OUTPUT_WORLD` 声明 176 字节而 cap 是 4096，截断测试什么都没验。
+- `mock/wasm-components` 根本没编译过：漏声明 `serde`、`tests` 成了公开模块、
+  `MANIFEST.json` 的扁平结构与 Rust 的结构体变体对不上、WIT 包名解析没剥尾部分号。
+
+另有若干条是**测试期望写错而非实现错**，已按文档规则改正：写入后 hash 状态应为
+`UnknownHash`（丢了摘要还声称 `MetadataKnown` 才是设计禁止的陈旧声明）；
+分页顺序应断言 pre-order 规则而非硬编码名字表；foreign package 的两个接口导出都要改；
+「拒绝原因各不相同」该断言的是原因而非 (code, check) 对。
+
+**留待下一阶段**：`tests/integration` 与 `tests/system` 仍在用自己那份手写 fake，
+尚未切换到 mock crate 引用。切换后那两份重复可删。
+
 
 ## 6. license 门禁（cargo-deny 的离线替代）
 
