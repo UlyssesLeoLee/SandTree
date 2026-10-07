@@ -39,3 +39,6 @@ coverage/
 # Python bytecode caches from the offline gates (scripts/license_gate.py).
 __pycache__/
 *.pyc
+# Per-worktree gate driver created for the mock-project lanes (mock/LANES.md).
+# Scaffolding for a throwaway parallel build, not part of the product.
+scripts/lane.ps1
