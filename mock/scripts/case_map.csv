@@ -16,7 +16,7 @@ UT-014,UT,FR-051,capability::tests::scope_does_not_cross_component_boundary;capa
 UT-015,UT,FR-052,hot_swap::tests::prepare_failure_never_reaches_accept_or_the_route;route::tests::routes_are_per_plugin,
 UT-016,UT,FR-052,hot_swap::tests::install_of_an_unhealthy_provider_routes_nothing;hot_swap::tests::init_failure_keeps_the_old_generation_serving,
 UT-017,UT,FR-052,hot_swap::tests::state_schema_downgrade_is_refused_before_any_migration;hot_swap::tests::equal_state_schema_is_accepted,
-UT-018,UT,FR-054,wit::tests::rejects_component_from_wrong_package;wit::tests::parses_and_accepts_known_world;provider_binding::;engine::tests::every_fixture_is_a_real_component;engine::tests::the_valid_fixture_compiles,
+UT-018,UT,FR-054,wit::tests::rejects_component_from_wrong_package;wit::tests::parses_and_accepts_known_world;provider_binding::;worker_loading::;daemon_install::;engine::tests::every_fixture_is_a_real_component;engine::tests::the_valid_fixture_compiles,
 UT-019,UT,FR-063,router::tests::slow_subscriber_does_not_grow_without_bound;router::tests::dropping_a_subscription_unregisters_it,
 UT-020,UT,FR-064,redact::tests::key_value_secrets_are_masked;redact::tests::bearer_headers_are_masked;redact::tests::pem_private_keys_are_removed,
 UT-021,UT,FR-066,tests::the_diagnostics_bundle_is_redacted_and_deterministic;redact::tests::url_userinfo_is_masked,

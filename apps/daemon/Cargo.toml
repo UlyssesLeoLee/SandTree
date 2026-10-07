@@ -25,7 +25,12 @@ sandtree-plugin-host.workspace = true
 sandtree-sdk.workspace = true
 sandtree-store.workspace = true
 async-trait.workspace = true
+# The staging loader drives the worker library. Optional because the daemon's
+# default loader refuses instead (ADR-018): a daemon that has not been built
+# with a staging path must not silently acquire one.
+sandtree-plugin-worker = { workspace = true, optional = true }
 futures.workspace = true
+walkdir.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
@@ -34,3 +39,10 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[features]
+default = []
+# Stage real components in-process (ADR-018). Off by default: the worker is
+# supposed to live in its own process (FR-055), so this is an opt-in, not a
+# build flavour that quietly becomes the shipping configuration.
+in-process-worker = ["dep:sandtree-plugin-worker"]

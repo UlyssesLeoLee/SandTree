@@ -33,11 +33,21 @@ wat = { version = "1", optional = true }
 sandtree-model.workspace = true
 sandtree-sdk.workspace = true
 sandtree-plugin-host = { workspace = true, features = ["wasmtime-abi"] }
+# The worker is the other half of the plugin path: `tests/worker_loading.rs`
+# drives `Worker::load` over this fixture, which is the only way to prove the
+# worker half actually stages a component rather than only compiling.
+sandtree-plugin-worker = { workspace = true, features = ["wasmtime-abi"] }
+# The daemon's control plane plus its staging loader. `tests/daemon_install.rs`
+# drives `plugin.install` over this fixture, which is the only place the whole
+# path — package on disk -> verify -> load -> publish -> route -> swap — is
+# exercised as one thing.
+sandtree-daemon = { workspace = true, features = ["in-process-worker"] }
 # Unconditional, unlike the `engine` feature above: the binding tests must run
 # in the ordinary `cargo test --workspace` gate, not only under a flag.
 wasmtime = { workspace = true, features = ["wat"] }
 wat = "1"
 tokio = { workspace = true, features = ["macros", "rt"] }
+tempfile.workspace = true
 
 [features]
 default = []

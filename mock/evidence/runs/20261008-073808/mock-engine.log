@@ -1,0 +1,33 @@
+   Compiling sandtree-mock-wasm-components v1.1.0 (E:\SandTree\mock\wasm-components)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.91s
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_mock_wasm_components-2c72f92276aeeb53.exe)
+
+running 25 tests
+test tests::every_expected_code_exists_in_the_shipped_error_registry ... ok
+test tests::every_reject_fixture_reports_a_distinct_cause ... ok
+test tests::fixture_names_and_files_are_unique ... ok
+test tests::interface_names_derive_back_to_the_declared_package ... ok
+test engine::tests::no_fixture_is_marked_blocked_any_more ... ok
+test tests::every_fixture_has_a_manifest_entry_and_the_reverse ... ok
+test tests::manifest_and_code_agree_on_every_outcome ... ok
+test wit_equivalence::tests::the_corpus_implements_exactly_the_declared_world ... ok
+test tests::no_sandtree_exports_fixture_is_a_standalone_component ... ok
+test tests::only_the_valid_fixture_is_expected_to_load ... ok
+test tests::manifest_paths_and_constants_resolve ... ok
+test tests::reject_fixtures_drop_exactly_the_interface_they_are_about ... ok
+test wit_equivalence::tests::the_interface_export_names_match_the_wit_identity ... ok
+test wit_equivalence::tests::the_rename_is_the_only_difference_and_it_is_real ... ok
+test wit_equivalence::tests::wit_copy_matches_design_file_modulo_the_rename ... ok
+test wit_equivalence::tests::both_wit_files_declare_the_package_the_fixtures_use ... ok
+test tests::the_valid_fixture_exports_both_required_interfaces ... ok
+test tests::manifest_export_lists_match_the_code ... ok
+test tests::derived_fixtures_differ_from_the_valid_one_only_where_intended ... ok
+test engine::tests::the_valid_fixture_compiles ... ok
+test engine::tests::every_reject_fixture_really_is_rejected_before_binding ... ok
+test engine::tests::compiled_exports_are_exactly_what_the_manifest_claims ... ok
+test engine::tests::no_fixture_imports_anything_from_the_host ... ok
+test engine::tests::every_fixture_is_a_real_component ... ok
+test engine::tests::compiled_bytes_round_trip_through_the_binary_format ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

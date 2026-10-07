@@ -12,6 +12,8 @@
 #![deny(missing_docs)]
 
 pub mod events;
+#[cfg(feature = "in-process-worker")]
+pub mod loader;
 pub mod methods;
 pub mod plugins;
 

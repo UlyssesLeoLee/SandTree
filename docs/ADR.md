@@ -514,3 +514,68 @@ non-default feature，因此所有 `#[cfg(feature = ...)]` 的模块**不在门�
 **门禁**　`tests/provider_binding.rs` 9 条：descriptor / 七个 lifecycle 调用 / discover / inspect /
 invoke 全部走真实 guest；外加一条「装不上的组件在服务任何东西之前就被拒」。
 `mock-engine` 语料 7 条。变异验证：`load` 里去掉 `arm_with` 立刻变红（component 装不上）。
+
+---
+
+## ADR-018 插件装载路径：先让它真的能装，再谈进程隔离
+
+**背景**。ADR-016 把四个插件端点从 `not_served` 里搬出来并接上 `HotSwapSupervisor`，
+但 `PluginControl` 的 `PluginLoader` 只有一个 `UnavailableLoader`——端点是「已注册」的，
+**每一个都恒定拒绝**。这两种不可达长得一模一样，而这正是本仓反复清掉的那种形状。
+
+ADR-017 之后组件能编译能绑定了，于是「组件能跑」与「产品能装」之间剩下的就只是装载路径。
+本 ADR 记录把这段补上的做法，以及一处**刻意的设计偏离**。
+
+### 1. `PluginLoader::stage` 缺一件东西：字节从哪来
+
+`stage(plugin, generation)` 只收到插件 id 和代数——这是对的，控制平面本就不该知道字节在哪。
+所以包来源是另一个可注入的关切（`PackageSource`），不是一个参数。
+
+`DirectoryPackages` 的索引方式本身是有讲究的：目录名**不是**身份。插件身份是
+`PluginId::derive(&[<manifest plugin_id>])`，即一串 `plg-<hex>`——当 map key 好用，
+当运维要敲的目录名毫无用处。所以索引是「遍历 `plugin.json` 并推导 id」，
+装一个插件就是丢个目录进去，而不是先算个哈希再 mkdir。
+
+顺带得到两条免费的不变量：两个包声明同一身份是**部署期**错误（否则「我装的是哪个」
+变成掷硬币）；磁盘上任何一份解析不了的 manifest 在**启动时**就炸，而不是等某个运维
+恰好去装它的时候。
+
+### 2. 偏离：worker 跑在 daemon 进程内（FR-055）
+
+DD-PLG §10 与 FR-055 要求 worker 是**独立进程**， blast radius 落在它自己身上。
+本轮实现的 `WorkerLoader` 没有做到这一点，它在 daemon 进程内 stage。
+
+**保住了什么**：guest 的内存安全与能力限制与它的 store 在哪儿无关。一个 trap 就是 trap，
+WASM guest 无法损坏宿主内存。
+
+**丢掉了什么**：宿主侧 worker 代码本身的隔离，以及独立进程才有的 OS 级资源上限。
+
+因此它**不是 daemon 的默认 loader**。`PluginControl::unavailable` 仍然是出厂默认，
+没显式选择这个 feature 的构建仍然拒绝而不是假装。开启它是一个决定，不是副作用——
+feature 名 `in-process-worker`，默认关闭，且注释里写明它为什么默认关闭。
+
+### 3. 门禁：三条真实端到端
+
+`mock/wasm-components/tests/` 下三组，全部无 stub：
+
+- `worker_loading.rs`（7 条）——`Worker::load` 跑真实组件：descriptor、resource port、
+  生命周期 runtime 与 generation 号三者的**同一性**、init 后服务、retire 会 drain+shutdown、
+  许可证被拒时连引擎都到不了。
+- `daemon_install.rs`（6 条）——从磁盘上的包到路由：`install` 发布并把 provider 流量送到组件、
+  重复 install 被拒并指名 `hotswap`、`hotswap`+`rollback`、disable 清理回滚储备、
+  许可证被拒不产生任何路由、插件不在磁盘上时路由为空。
+- `provider_binding.rs`（9 条，ADR-017）。
+
+其中一条断言强度值得单说：`rollback_returns_to_the_first_generation` 用
+`Arc::ptr_eq` 断言**回滚恢复的是当初被挤出的那一个 generation 实例**，
+而不是重新 stage 一个看起来等价的。这条断言挡住的正是 ADR-016 之前那类「路由指向了
+另一个实例」的问题，而它在纯文本断言下会一直绿。
+
+### 4. 剩下的（不是阻塞，是没做）
+
+- **进程隔离**（FR-055）。真正的做法是 daemon spawn `sandtree-plugin-worker`
+  子进程、用 `crates/ipc` 的 `Transport` 代理 `GenerationRuntime` 与 `ResourceProvider`。
+  `apps/plugin-worker/src/main.rs` 目前仍是空的 `fn main() {}`，`crates/ipc` 也没有
+  客户端 transport。这三件是下一个 ADR 的内容，形状已经由 `PluginLoader` 这个接缝定死了。
+- **`diagnostic.version` 之外的可观测**：daemon 现在能装了，但没有任何界面把
+  「插件已安装 / 正在服务第几代」显示出来。

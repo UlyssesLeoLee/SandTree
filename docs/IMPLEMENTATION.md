@@ -261,7 +261,7 @@ dist/SandTree-1.1.0-x64.msi     2.41 MB   安装程序，免提权
 | 真实 `.wasm` 组件产物 | 本机无 rustup shim，无法安装 `wasm32-wasip2` target 交叉编译 | `plugin-host` 的 component 加载路径由 WAT fixture 覆盖；ABI 由 `wit/` 与 `schemas/*.wit` 冻结 |
 | `Docker Sandboxes` 实验 API 真实联调 | 该 API 为 experimental | provider 以 capability probe + CLI 降级 + fixture 兜底实现（DD-PLG §8 明文要求的三级降级） |
 | `cargo deny check advisories` | 无 cargo-deny 二进制 | license/source 两项已由离线门禁覆盖；advisory（RustSec）一项未覆盖 |
-| plugin worker 传输（IPC/进程通道） | daemon 不宿主 WASM engine，组件必须跑在 worker 进程里（FR-055）。`PluginLoader` 是为此留的接缝，本仓只提供 `UnavailableLoader` | `plugin.install` / `plugin.hotswap` 端点已真实注册并派发，但当前**恒定拒绝**并给出可读原因。接上 loader 即变成可用安装，不需要改端点 |
+| plugin worker 进程隔离（FR-055） | `WorkerLoader` 在 daemon 进程内 stage 真实组件（ADR-018）。guest 的内存安全与 capability 限制不受影响，但宿主侧 worker 代码没有独立边界，也就没有 OS 级资源上限 | 独立进程边界：spawn `sandtree-plugin-worker` 子进程 + `crates/ipc` 客户端 transport 代理 `GenerationRuntime`/`ResourceProvider`。`PluginLoader` 接缝已定形状，`apps/plugin-worker/src/main.rs` 仍是空的 `fn main()` |
 
 ## 7.1 插件生命周期：机制已通，staging 待接（ADR-016）
 
