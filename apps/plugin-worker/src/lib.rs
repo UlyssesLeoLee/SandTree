@@ -15,6 +15,8 @@
 
 #![deny(missing_docs)]
 
+pub mod serve;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

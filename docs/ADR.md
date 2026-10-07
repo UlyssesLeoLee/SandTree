@@ -579,3 +579,158 @@ feature 名 `in-process-worker`，默认关闭，且注释里写明它为什么�
   客户端 transport。这三件是下一个 ADR 的内容，形状已经由 `PluginLoader` 这个接缝定死了。
 - **`diagnostic.version` 之外的可观测**：daemon 现在能装了，但没有任何界面把
   「插件已安装 / 正在服务第几代」显示出来。
+
+---
+
+## ADR-019 worker 协议：先把协议测通，再谈进程
+
+**背景**。ADR-018 让 `plugin.install` 真的能装组件，但 worker 跑在 daemon 进程内，
+FR-055 要求的进程边界还没做。那条边界的其余部分有四件：协议、传输、spawn、代理。
+本 ADR 做前三件里可测的部分——**协议**——以及把代理写成对控制平面不可见的形状。
+
+### 1. 协议放在 `plugin-host`，不在任何一边
+
+它是 daemon 与 worker 之间的契约，而两边**本来就都依赖** `plugin-host`。
+放到别处，必然有一边长出对另一边的依赖——那正是接缝要避免的耦合。
+
+单请求单响应、严格交替、没有 correlation id。这是频道形状的直接后果，不是偷懒：
+客户端在连接上串行化，所以第二个请求不可能在第一个响应写完之前发出。
+**一旦将来允许并发，id 就变成强制项**，届时必须同时补「两个响应被调换顺序」的检测，
+否则两个答案会被安到错误的调用上而没有任何东西失败。这一条写在协议模块的文档里，
+就是为了让下一个改它的人先看见约束。
+
+错误是**值**不是断连：插件拒绝 drain、组件 trap、manifest 解析失败，都作为
+`Response::Err` 带稳定错误码回来，连接保持。**只有传输本身断了才结束会话**——
+因为「插件说不」和「worker 死了」需要运维做完全不同的事，不能作为同一个事件到达。
+
+`WorkerLimits` 与 `Generation` 因此加了 serde：上限由宿主决定并**发给** worker，
+让 worker 自己挑一个等于没有边界。
+
+### 2. 协议层的门禁（`worker_proto`，7 条）
+
+每种 request 逐一 round-trip；op 名唯一；错误码往返后**保持**同一个稳定码；
+未知错误码**原样进 message** 而不是变成成功；畸形输入是错误而不是默认值；
+request 与 response 不可互换。
+
+「未知错误码不能变成成功」这条是刻意的：一个本版本不认识的失败码如果被默认成 `ok`，
+就是一次最坏的误读——**失败被读成了成功**。
+
+### 3. 传输层的门禁（`sandtree_ipc::loopback`，5 条）
+
+一个 crate 为什么要「自带测试传输」：否则协议的每一条测试要么需要真的命名管道
+（Windows 专有，于是协议的���误路径在别的平台完全没被测过），要么各自手搓一对 channel
+（于是每个 test target 在测不同的东西）。
+
+这一对**刻意简单**：两个 mailbox、两个唤醒，不缓冲、不重排。在这里通过的协议测试，
+测的是协议而不是通道。
+
+其中两条守的是真实故障：一端 drop 后另一端 `recv` 必须返回 `None` 而**不是挂住**
+（否则死掉的 worker 会变成永远等待的 daemon）；已缓冲的消息必须在对端关闭后仍然送达
+（否则 worker 最后一个请求的答复会丢，一次干净关闭变成一次丢回复）。
+
+### 4. 整条链路的门禁（`worker_protocol`，7 条）
+
+daemon 侧 `RemoteLoader` ↔ worker 侧 `WorkerServer`，跨传输驱动**真实组件**：
+
+- install 后路由到的 generation 能把 discover/inspect/invoke 送到组件；
+- lifecycle 越过边界仍然正确（descriptor / health / prepare / accept / drain）；
+- invoke 的整个请求完整过界；
+- **worker 的拒绝带着同一个稳定码回来**（许可证被拒仍是 `ST-PLG-001`，
+  而不是被抹平成一个通用失败——那会让运维去查一个并不存在的传输 bug）；
+- swap 换到**第二个 worker**，rollback 回到第一个，且用 `Arc::ptr_eq` 断言
+  恢复的是当初被挤出的那个实例；
+- **worker 消失是 typed failure 而非空结果**：`ST-PLG-002` + 提到 `load`，
+  不是「这个 provider 没有资源」——那是 ADR-OBS-001 明令禁止的塌缩。
+  第 7 条是为此补的确定性路径，原因见 §7。
+
+每一个 generation 拿到**自己的一对通道和自己的 server task**，这是生产 spawner 的形状：
+「同插件的两个代不共享 store」因此是结构性的，而不是要靠人记得。
+
+### 5. 剩下的（不是阻塞，是没做）
+
+**子进程 spawn 与命名管道客户端。** `apps/plugin-worker/src/main.rs` 仍是空的
+`fn main()`；`crates/ipc` 只有 server 端 `NamedPipeTransport`，没有客户端。
+所以现在的隔离仍然是**接口**上的而不是**进程**上的：daemon 侧的 `WorkerClient`
+和 `WorkerServer` 之间隔着真实的编解码与一个真实传输，但它仍在同一进程里。
+
+这两件不急着做的理由是形状已经定死：`spawn` 是一个闭包 `Fn() -> Box<dyn Transport>`，
+换成「spawn 子进程 + 连接命名管道 + 杀掉它」只影响闭包内部，控制平面、`PluginControl`
+与回滚语义一行不动。先把协议测通再谈管道，是因为管道之上的 bug 会以
+「daemon 卡住」的形式穿过两层才显现。
+
+### 6. 缺陷：ADR-017 的规则漏了另一半
+
+ADR-017 定下「门禁必须带 `--all-features`」，因为 feature-gated 的代码等于不在门禁里。
+ADR-019 造出 `RemoteLoader` 之后撞上了**镜像**的一半：**gate 里的代码有人管了，
+gate 外、但依赖 gate 里符号的代码没人管**。
+
+`apps/daemon/src/worker_client.rs` 无条件编译，却 `use crate::loader::PackageSource`，
+而 `loader` 整个模块在 `#[cfg(feature = "in-process-worker")]` 后面。于是：
+
+- `cargo clippy --workspace --all-features` 全绿——它把 gate **打开**了；
+- daemon 在**出厂配置**下编译不过；
+- 唯一发现它的是 `it` / `st` / `uat` 三个 gate 同时 exit 101——报的是症状不是病因。
+
+`--all-features` 和「按出厂配置编译」是两条正交的轴，只有一条轴的门禁在任一方向都会漏。
+
+**修法两条，都要**：
+
+1. **模块边界跟着依赖边界走。** `PackageSource` / `DirectoryPackages` 不碰 wasmtime，
+   它们只是「读文件、推导 id」，凭什么被一个装 wasmtime 的 gate 挡住？拆成
+   `apps/daemon/src/packages.rs`（无门控），`loader.rs` 只剩 `WorkerLoader`
+   （仍在 gate 后，因为它是唯一真的要构建引擎的那个）。`worker_client.rs` 改从
+   `packages` 导入。副产品：`packages` 的 9 条单测从此进入**默认构建**，
+   不再只在 `--all-features` 下才跑。
+2. **门禁补上第二根轴。** `run_regression.ps1` 新增 `default-build` gate：
+   用 `cargo metadata --no-deps` 查出**所有声明了 optional 依赖的 crate**，
+   逐个 `cargo check -p <pkg> --offline`。
+
+第二条有两个必须写下来的细节：
+
+- **一个 crate 一次 cargo 调用**，不是一次调用选四个包。cargo 在**单次调用内**跨包统一
+  feature，所以 `check -p sandtree-daemon -p sandtree-mock-wasm-components` 会通过 mock
+  crate 的 dev-dependency 把 `in-process-worker` 打开，然后「测着开了 gate 的构建、
+  报告说测的是默认构建」——正是这道 gate 要抓的那个失败。分开调用才有独立的
+  feature 解析。
+- **必须带自失效阈值。** `$gated.Count -lt 1` 时报 `DEFAULT GAP` 并判失败：
+  一道从空列表算出来的 gate 会编译零个 crate 并通过，比没有 gate 更糟。
+
+变异验证：把 `worker_client.rs` 的 import 改回 `crate::loader`，gate 立刻 exit 101
+（`E0432: unresolved import crate::loader`），改回即恢复。
+
+### 7. 缺陷：「worker 死了」这件事有两个错误码
+
+ADR-019 §1 立了一条规矩：失败是**值**不是断连，「插件说不」和「worker 死了」必须
+长得不一样。写完第一版就违反了这条规矩——而且是它自己写的测试先撞上的。
+
+`WorkerClient::transport_error()` 原本**保留 transport 自己的错误码**。而 loopback 传输
+的两种死法给的是两个不同的码：
+
+| 死法 | transport 返回 | 宿主报出 |
+| --- | --- | --- |
+| 对端死在宿主**写入之前**（`send` 进已关闭的 mailbox） | `CORE_INVALID` | `ST-CORE-001` |
+| 对端死在**应答之前**（`recv` 读到流结束） | `PLUGIN_HEALTH_FAILED` | `ST-PLG-002` |
+
+**同一件事**——这个 generation 的 worker 没了——因为**调度时序**不同而报出两个码。
+`ST-CORE-001` 的含义是「invalid request / invariant violation」，运维读到它会去找
+请求哪里写错了，而不是去找那个已经死掉的 worker。分类权交给了传输实现，
+而传输实现没有义务、也没有能力知道这件事对宿主意味着什么。
+
+修法：`transport_error()` 一律归一到 `PLUGIN_HEALTH_FAILED`（retryable=yes，
+这正是 swap supervisor 需要它可重试的原因），原始码**留在 message 文本里**，
+细节不丢但不再承担分类职责。
+
+**测试这一条比修法本身更值得记。** 原测试写成这样：
+
+```rust
+tokio::spawn(async move { drop(server); });   // 异步 drop，与 send 竞争
+```
+
+于是它每次跑都在**赌**对端死在写之前还是写之后。变异验证（把 `e.code` 还原）时：
+
+- 新写的确定性测试 `a_worker_already_gone_...` → **红**（`ST-CORE-001` vs `ST-PLG-002`）
+- 原来那条 racing 测试 `a_worker_that_disappears_...` → **绿**
+
+也就是说，**缺陷存在时那条测试是绿的**。它断言的是一个它只能一半时间观察到的类别。
+判据因此补一条：断言「某个错误类别」而不是「某个错误码」时，
+**必须把落点定死**——构造出确定的失败路径，否则这条断言的强度取决于调度器。

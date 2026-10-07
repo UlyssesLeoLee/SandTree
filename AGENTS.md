@@ -105,6 +105,36 @@ cargo deny check        # license/source/advisory gate
 `mock-engine` gate 显式编译 engine 语料，并断言它**至少跑了 1 条**测试
 （编译了零个的 gate 比没有 gate 更糟）。
 
+`--all-features` 只是两条正交轴里的一条。另一条是**出厂配置（default features）**：
+
+**没有任何门禁覆盖「gate 外却依赖 gate 内符号」的代码。**
+`apps/daemon/src/worker_client.rs` 无条件编译却引用了 `#[cfg(feature =
+"in-process-worker")]` 门后的 `PackageSource`——`clippy --all-features` 全绿，
+因为它把 gate 打开了，而 daemon 在出厂配置下根本编译不过。
+只有 `it`/`st`/`uat` 三个 gate 同时 exit 101 撞见它，报的是症状不是病因。
+
+因此：`run_regression.ps1` 有 **`default-build` gate**，用 `cargo metadata --no-deps`
+查出所有声明了 optional 依赖的 crate，逐个 `cargo check -p <pkg> --offline`。
+**一个 crate 一次调用**——cargo 在单次调用内跨包统一 feature，一次选四个包会通过
+dev-dependency 把 gate 打开，于是「测着开了 gate 的构建、报告说测的是默认构建」。
+
+模块边界跟着依赖边界走：`PackageSource` 不碰 wasmtime，就不该被装 wasmtime 的 gate 挡住
+（`apps/daemon/src/packages.rs` 无门控，`loader.rs` 只剩 `WorkerLoader`）。
+
+## 断言错误类别时，失败落点必须定死
+
+「worker 死了」曾因**调度时序**报出两个码：写在已关闭 mailbox 上失败是 `ST-CORE-001`
+（含义是「请求非法」），读到流结束是 `ST-PLG-002`。同一件事，两个分类。
+
+写这个 bug 的测试自己踩了坑：`tokio::spawn(async move { drop(server); })` 让对端
+**异步**消失，于是 `send` 和 `recv` 抢跑，测试每次都在赌它观察到哪一个。
+变异验证时它**绿的**——缺陷存在，断言强度只有一半。
+
+判据：断言「错误的类别」而不是「错误的内容」时，**把失败路径构造得唯一**。
+`tokio::spawn(drop(peer))` 是竞态；`drop(peer)` 同步发生在返回前才是确定性路径。
+`apps/daemon/src/worker_client.rs` 的 `transport_error()` 现在把 transport 层错误
+一律归一到 `PLUGIN_HEALTH_FAILED`，原始码留在 message 里。
+
 ## 提交与文档
 
 - 每个 crate 的改动须带 FR/NFR 追溯注释（`// FR-0xx` / `// NFR-xx`）。

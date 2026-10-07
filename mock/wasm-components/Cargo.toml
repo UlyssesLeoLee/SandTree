@@ -30,6 +30,7 @@ wat = { version = "1", optional = true }
 # The end-to-end binding check drives the *product* adapter over these
 # fixtures, so it depends on the product crates. The dependency direction is
 # mock -> product; no product crate may depend on this one (mock/README.md).
+sandtree-ipc.workspace = true
 sandtree-model.workspace = true
 sandtree-sdk.workspace = true
 sandtree-plugin-host = { workspace = true, features = ["wasmtime-abi"] }
@@ -46,7 +47,7 @@ sandtree-daemon = { workspace = true, features = ["in-process-worker"] }
 # in the ordinary `cargo test --workspace` gate, not only under a flag.
 wasmtime = { workspace = true, features = ["wat"] }
 wat = "1"
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 tempfile.workspace = true
 
 [features]

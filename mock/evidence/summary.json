@@ -1,8 +1,8 @@
 {
-  "run": "20261008-073808",
+  "run": "20261008-080450",
   "total_cases": 159,
-  "total_tests_executed": 1148,
-  "tests_passed": 1147,
+  "total_tests_executed": 1169,
+  "tests_passed": 1168,
   "tests_failed": 0,
   "tests_ignored": 1,
   "ignored_tests": [
@@ -10,6 +10,7 @@
   ],
   "gate_exit": {
     "contract": 0,
+    "default-build": 0,
     "git-channel": 0,
     "it": 0,
     "mcp-channel": 0,

@@ -26,7 +26,20 @@ use crate::generation::LoadedGeneration;
 ///
 /// Generation 0 is reserved for "not staged", so a value built from `Default` is
 /// visibly unrouted rather than silently generation 1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(transparent)]
 pub struct Generation(pub u64);
 
 impl std::fmt::Display for Generation {

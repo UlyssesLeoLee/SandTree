@@ -16,6 +16,7 @@
 #![deny(missing_docs)]
 
 pub mod framing;
+pub mod loopback;
 pub mod method;
 pub mod router;
 pub mod transport;

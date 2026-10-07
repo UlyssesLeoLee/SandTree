@@ -1,0 +1,17 @@
+   Compiling sandtree-daemon v1.1.0 (E:\SandTree\apps\daemon)
+error[E0432]: unresolved import `crate::loader`
+  --> apps\daemon\src\worker_client.rs:47:12
+   |
+47 | use crate::loader::PackageSource;
+   |            ^^^^^^ could not find `loader` in the crate root
+   |
+note: found an item that was configured out
+  --> apps\daemon\src\lib.rs:16:9
+   |
+15 | #[cfg(feature = "in-process-worker")]
+   |       ----------------------------- the item is gated behind the `in-process-worker` feature
+16 | pub mod loader;
+   |         ^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `sandtree-daemon` (lib) due to 1 previous error

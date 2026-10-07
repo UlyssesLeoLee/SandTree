@@ -1,0 +1,14 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running tests\e2e.rs (E:\DevCache\cargo\target-dev\debug\deps\e2e-c1aa522ffdc4a85e.exe)
+
+running 7 tests
+test a_penetrable_sandbox_is_never_contacted ... ok
+test an_endpoint_without_a_grant_is_never_contacted ... ok
+test a_server_error_is_degraded_and_never_an_empty_tool_list ... ok
+test no_mcp_tool_is_ever_invoked ... ok
+test a_sandbox_published_endpoint_is_called_over_http_and_read ... ok
+test the_evidence_hash_moves_when_the_tool_inventory_changes ... ok
+test an_unreachable_endpoint_yields_unavailable_not_an_empty_inventory ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+

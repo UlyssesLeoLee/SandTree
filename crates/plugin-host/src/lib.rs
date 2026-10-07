@@ -38,6 +38,8 @@ pub mod hot_swap;
 pub mod limits;
 pub mod route;
 pub mod verify;
+/// The daemon ↔ plugin-worker wire protocol (FR-055).
+pub mod worker_proto;
 
 #[cfg(feature = "wasmtime-abi")]
 pub mod engine;

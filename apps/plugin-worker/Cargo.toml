@@ -14,8 +14,10 @@ path = "src/lib.rs"
 [dependencies]
 blake3.workspace = true
 sandtree-model.workspace = true
+sandtree-ipc.workspace = true
 sandtree-plugin-host.workspace = true
 sandtree-sdk.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 wasmtime = { workspace = true, optional = true }
 

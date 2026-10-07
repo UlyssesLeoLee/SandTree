@@ -23,7 +23,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use sandtree_daemon::loader::{DirectoryPackages, WorkerLoader, COMPONENT_FILE, MANIFEST_FILE};
+use sandtree_daemon::loader::WorkerLoader;
+use sandtree_daemon::packages::{DirectoryPackages, COMPONENT_FILE, MANIFEST_FILE};
 use sandtree_daemon::plugins::PluginControl;
 use sandtree_model::id::PluginId;
 use sandtree_model::resource::{ResourceKind, ResourceState};

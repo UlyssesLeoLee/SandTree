@@ -9,7 +9,12 @@
 use sandtree_model::error::{DomainError, ErrorCode};
 
 /// Resource ceiling for one plugin worker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Serialisable because it crosses a process boundary: the host owns the
+/// ceiling, and a worker in its own process is told what that ceiling is rather
+/// than guessing one. A limit the worker invents for itself would not be a
+/// containment boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WorkerLimits {
     /// Wasmtime fuel budget for a single call. Exhaustion traps the guest
     /// instead of letting it spin (FR-054).

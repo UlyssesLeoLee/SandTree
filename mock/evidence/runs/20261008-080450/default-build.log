@@ -1,0 +1,6 @@
+crates checked as shipped (default features): sandtree-plugin-host, sandtree-daemon, sandtree-plugin-worker, sandtree-mock-wasm-components
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+    Checking sandtree-daemon v1.1.0 (E:\SandTree\apps\daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.87s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s

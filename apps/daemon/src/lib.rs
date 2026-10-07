@@ -15,7 +15,9 @@ pub mod events;
 #[cfg(feature = "in-process-worker")]
 pub mod loader;
 pub mod methods;
+pub mod packages;
 pub mod plugins;
+pub mod worker_client;
 
 use std::path::PathBuf;
 use std::sync::Arc;

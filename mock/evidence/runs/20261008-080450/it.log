@@ -1,0 +1,31 @@
+   Compiling sandtree-daemon v1.1.0 (E:\SandTree\apps\daemon)
+   Compiling sandtree-integration-tests v1.1.0 (E:\SandTree\tests\integration)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.98s
+     Running tests\discovery.rs (E:\DevCache\cargo\target-dev\debug\deps\discovery-657ceed9a5f46547.exe)
+
+running 2 tests
+test relations_that_span_a_page_boundary_are_still_written ... ok
+test a_second_scan_of_an_unchanged_provider_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\scenarios.rs (E:\DevCache\cargo\target-dev\debug\deps\scenarios-97ded514c93abb97.exe)
+
+running 14 tests
+test hot_swap_flow::a_state_schema_downgrade_keeps_the_old_generation ... ok
+test hot_swap_flow::a_failed_upgrade_never_takes_the_route_down ... ok
+test observation_plane::probe_data_never_arrives_as_host_native ... ok
+test control_plane::a_finished_operation_is_persisted_with_its_terminal_state ... ok
+test control_plane::an_ungranted_operation_never_reaches_the_provider ... ok
+test observation_plane::a_degraded_observation_plane_yields_an_unavailable_snapshot ... ok
+test ipc_surface::the_daemon_has_no_unrouted_methods ... ok
+test control_plane::a_provider_failure_keeps_its_stable_code ... ok
+test ipc_surface::malformed_parameters_are_rejected_before_any_state_change ... ok
+test control_plane::destroy_without_force_is_refused_and_audited_as_a_refusal ... ok
+test observation_plane::losing_observation_leaves_the_control_plane_intact ... ok
+test ipc_surface::an_unimplemented_method_says_so_explicitly ... ok
+test discovery_flow::a_two_hundred_resource_scan_is_fast ... ok
+test discovery_flow::one_broken_provider_does_not_hide_a_healthy_one ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

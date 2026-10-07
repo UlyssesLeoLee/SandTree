@@ -15,6 +15,7 @@
 
       contract  the frozen schemas/WIT/DDL the implementation must match
       ut        unit tests -- every --lib target except the mock crates
+      default-build  every crate with an optional dependency, as shipped
       mock      the mock crates' own suite, every target
       it        integration tests -- tests/integration
       st        system tests    -- tests/system
@@ -165,6 +166,49 @@ $c = Invoke-Gate -Name 'ut' -CargoArgs @(
 )
 if ($c -ne 0) { $failures += 'ut' }
 
+# The mirror image of the `--all-features` rule above, learned the same way.
+#
+# `--all-features` covers the code *behind* a gate. Nothing covered the code that
+# has to build *without* one. `apps/daemon/src/worker_client.rs` was compiled
+# unconditionally and reached for a `PackageSource` that lived in a module gated
+# on `in-process-worker`: `cargo clippy --all-features` was green, because it
+# turned the gate on, while the daemon did not compile in the configuration it
+# actually ships. The only things that noticed were three unrelated test gates
+# exiting 101, which names the symptom and not the cause.
+#
+# So: every crate that declares an optional dependency must build as shipped,
+# which is the default feature set.
+#
+# One cargo invocation per crate, deliberately. Cargo unifies features across
+# every package selected in a single invocation, so `check -p sandtree-daemon -p
+# sandtree-mock-wasm-components` enables `in-process-worker` through the mock
+# crate's dev-dependency and passes -- it would be testing the gated build while
+# reporting that it tested the default one, which is the exact failure this gate
+# exists to catch. Separate invocations get separate feature resolution.
+$gated = @((& cargo metadata --no-deps --offline --format-version 1 | ConvertFrom-Json).packages |
+    Where-Object { @($_.dependencies | Where-Object { $_.optional }).Count -gt 0 } |
+    ForEach-Object { $_.name })
+if ($gated.Count -lt 1) {
+    Write-Output ''
+    Write-Output 'DEFAULT GAP    : no crate declares an optional dependency, so default-build checked'
+    Write-Output '                  nothing and passed. A gate that compiles nothing is worse than none.'
+    $failures += 'default-build-coverage'
+}
+$defaultLog = Join-Path $RunDir 'default-build.log'
+$defaultExit = 0
+("crates checked as shipped (default features): {0}" -f ($gated -join ', ')) |
+    Out-File -FilePath $defaultLog -Encoding utf8
+foreach ($p in $gated) {
+    Write-Host "--- gate: default-build  (check -p $p --offline)"
+    & cargo check -p $p --offline *>&1 | Tee-Object -FilePath $defaultLog -Append | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "    exit=$LASTEXITCODE  (this crate does not build as shipped)"
+        $defaultExit = $LASTEXITCODE
+    }
+}
+Set-Content -Path (Join-Path $RunDir 'default-build.exit') -Value $defaultExit -Encoding ascii
+if ($defaultExit -ne 0) { $failures += 'default-build' }
+
 # The mock crates are test assets, but they are also real crates with their own
 # suite -- the fixture corpus, the ADR-OBS-001/003 proofs, the determinism
 # checks. Nothing else in this script runs those targets, so without this gate a
@@ -267,6 +311,9 @@ $engineOwned = $engineListed.Count - $engineDoctests
 $engineOnly = [Math]::Max(0, $engineOwned - $owned)
 
 $executed = 0
+# `default-build` is absent from this list on purpose: it compiles rather than
+# runs, so it contributes no tests. Adding it would not change the sum, and
+# listing a compile gate among the test gates invites reading it as coverage.
 foreach ($gate in @('contract', 'ut', 'mock', 'mock-engine', 'it', 'st', 'uat', 'git-channel', 'mcp-channel')) {
     $log = Join-Path $RunDir "$gate.log"
     if (-not (Test-Path $log)) { continue }
