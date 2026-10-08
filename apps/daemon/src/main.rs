@@ -10,6 +10,11 @@ use sandtree_daemon::{Daemon, DaemonConfig};
 fn main() -> ExitCode {
     let mut cfg = DaemonConfig::new();
     let mut args = std::env::args().skip(1);
+    // Collected, not acted on: `--check` used to `return` from inside this loop,
+    // which meant **every flag written after it was silently ignored**.
+    // `daemon --check --pipe X` probed the default pipe, not X — and reported
+    // success, so the self-check was confidently checking the wrong thing.
+    let mut check = false;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -39,7 +44,7 @@ fn main() -> ExitCode {
                 // Startup self-check: report coverage gaps and exit without
                 // entering the serve loop. Useful in CI and in a packaging
                 // smoke test.
-                return run_check(cfg);
+                check = true;
             }
             "-h" | "--help" => {
                 println!(
@@ -51,6 +56,12 @@ fn main() -> ExitCode {
             }
             other => return fail(&format!("unknown argument {other:?}")),
         }
+    }
+
+    // Acted on only once every flag has been read, so `--check` sees the same
+    // configuration a real start would.
+    if check {
+        return run_check(cfg);
     }
 
     let runtime = match tokio::runtime::Runtime::new() {
@@ -159,7 +170,13 @@ fn run_check(cfg: DaemonConfig) -> ExitCode {
             probe.is_ok()
         );
         if let Err(e) = probe {
-            eprintln!("cannot take {}: {}", daemon.pipe(), e.message);
+            // Same wording as the serve path, so "why won't it start" reads the
+            // same whether the operator ran `--check` or the real thing.
+            eprintln!(
+                "cannot take {}: {} — another daemon may be running",
+                daemon.pipe(),
+                e.message
+            );
             return ExitCode::from(3);
         }
         if gaps.is_empty() {

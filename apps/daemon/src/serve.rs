@@ -17,20 +17,12 @@
 //!
 //! # The window that is *not* covered
 //!
-//! `serve_loop` closes the *availability* window — the name is never unbound
-//! between clients, so a CLI cannot find "no daemon" while one is running.
-//!
-//! It does **not** close the *exclusivity* window, and this is worth being
-//! precise about. `FILE_FLAG_FIRST_PIPE_INSTANCE` is not a lease: it refuses a
-//! create only against an instance that itself carried the flag. Since the
-//! replacements `serve_loop` creates must *not* carry it (otherwise the daemon
-//! could never replace its own instance), any other process can bind the name.
-//! Measured, not assumed: a second daemon's `--check` succeeds while the first
-//! is mid-session.
-//!
-//! Closing it needs an out-of-band claim — a lock file beside the store, or a
-//! named mutex. Recorded as open item **G2** in ADR-020; the process test that
-//! observes it is named for the gap so that closing it turns that test red.
+//! `serve_loop` closes both windows as long as the daemon is running: the name is
+//! held continuously, and it is held by an instance carrying the guard flag, so a
+//! second daemon collides at `bind_first` instead of quietly alternating clients
+//! (NFR-S01). What is *not* covered is the moment after `serve_loop` returns —
+//! a daemon that is shutting down is no longer listening, and that is exactly
+//! what `probe_pipe` reports.
 
 use std::sync::Arc;
 
@@ -43,42 +35,43 @@ use sandtree_model::error::DomainError;
 ///
 /// Returns how many requests were answered in total.
 ///
-/// # Why the next instance is created *before* the current one is served
+/// # Why one instance, kept for the whole process
 ///
-/// A named-pipe instance is released when its last handle closes. So the obvious
-/// loop — create, wait for a client, serve it, go round again — leaves the name
-/// unbound between clients, and a second daemon can take it in exactly that
-/// window. This was not theoretical: a test that started a second daemon while
-/// the first was mid-session found it happily bound the same name.
+/// A named-pipe instance is single-client and is released when its last handle
+/// closes. So the obvious loop — create, wait for a client, serve it, go round
+/// again — leaves the name unbound between clients, and a CLI can find "no
+/// daemon" while a daemon is plainly running.
 ///
-/// The fix is tokio's own server idiom: take the connected instance, **create
-/// the next one immediately**, and only then serve the connected one. The
-/// previous instance drops when its session ends, but the name is already held
-/// again, so it is never free.
+/// The fix also has to keep the **guard flag**, or the name is given back to
+/// anyone: `FILE_FLAG_FIRST_PIPE_INSTANCE` refuses a create only against an
+/// instance that itself carried the flag, and any *replacement* must leave it
+/// off (otherwise the daemon could never replace its own instance). So a
+/// replacement-based loop keeps the name claimed but not *exclusive*.
 ///
-/// The one instance created with `first_pipe_instance` is the startup one. That
-/// flag is what makes "another daemon is already running" a loud failure instead
-/// of two daemons quietly alternating clients (NFR-S01).
+/// One instance that lives as long as the process satisfies both: it carries the
+/// flag, and every client connects to it in turn, with `disconnect()` releasing
+/// the client rather than the handle. A second daemon collides at `bind_first`
+/// (NFR-S01).
+#[cfg(windows)]
 pub async fn serve_loop(
     router: Arc<MethodRouter>,
     path: String,
     stop: impl std::future::Future<Output = ()> + Send,
 ) -> Result<usize, DomainError> {
-    let mut pending = NamedPipeTransport::bind_first(path.clone()).await?;
+    // One instance, flagged, held for the whole process lifetime.
+    let mut transport = NamedPipeTransport::bind_first(path).await?;
     let mut stop = std::pin::pin!(stop);
     let mut served = 0usize;
     loop {
         tokio::select! {
             biased;
             _ = &mut stop => return Ok(served),
-            connected = pending.connect_client() => {
+            connected = transport.connect_client() => {
                 connected?;
-                // Claim the name again before serving, so it is never free.
-                let next = NamedPipeTransport::bind_next(path.clone()).await?;
-                let mut current = std::mem::replace(&mut pending, next);
-                served += serve_connection(router.clone(), &mut current).await?;
-                // `current` drops here. `pending` has been holding the name since
-                // before the session started.
+                served += serve_connection(router.clone(), &mut transport).await?;
+                // Let the instance take the next client. Dropping it instead
+                // would give up the name, which is the thing being held.
+                transport.release_client().await?;
             }
         }
     }
@@ -201,17 +194,17 @@ mod tests {
 
     /// A second daemon is told no, at startup (NFR-S01).
     ///
-    /// Scoped to what is actually true: while a listener holds an instance the
-    /// name is unavailable. The window *between* two connections is not covered —
-    /// see the module note — and is recorded as an open item rather than asserted
-    /// here, because an assertion that only holds most of the time is worse than
-    /// a written-down gap.
+    /// The holder here is a plain listener that is kept alive for the test. That
+    /// is the *weaker* case and it is the one worth pinning: the daemon's real
+    /// hold is one flagged instance for the whole process, which
+    /// `a_second_daemon_is_refused_the_endpoint` in the process test proves
+    /// end to end across two real binaries.
     #[cfg(windows)]
     #[tokio::test(flavor = "multi_thread")]
     async fn a_pipe_that_is_in_use_is_reported_as_taken() {
         let path = unique_pipe("taken");
         // Held alive for the whole test: a listener that is dropped releases the
-        // name, which is exactly the gap the module documents.
+        // name, which is exactly why the hold has to outlive the sessions.
         let listener = NamedPipeTransport::at(path.clone());
         listener
             .bind()
@@ -220,8 +213,9 @@ mod tests {
 
         let err = probe_pipe(&path).await.expect_err("the name is in use");
         assert!(
-            err.message.contains("cannot create named pipe"),
-            "{}",
+            err.message.contains("already taken"),
+            "the refusal must say the name is taken in words rather than \
+             forwarding a localised OS string, got: {}",
             err.message
         );
     }

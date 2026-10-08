@@ -1,0 +1,16 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.15s
+     Running tests\e2e.rs (E:\DevCache\cargo\target-dev\debug\deps\e2e-7a32ab79a0ee86dd.exe)
+
+running 9 tests
+test a_grant_for_another_endpoint_does_not_reach_this_one ... ok
+test a_penetrable_sandbox_is_never_contacted_even_though_the_endpoint_answers ... ok
+test an_endpoint_without_a_grant_is_never_contacted ... ok
+test a_sandbox_published_remote_is_fetched_over_http_and_read ... ok
+test the_channel_reports_its_own_capability_surface ... ok
+test a_second_observation_reflects_a_changed_remote ... ok
+test the_evidence_hash_is_present_and_changes_with_the_content ... ok
+test an_endpoint_that_answers_something_else_yields_degraded_not_empty ... ok
+test a_connection_refused_yields_unavailable_and_never_an_empty_repository ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.05s
+

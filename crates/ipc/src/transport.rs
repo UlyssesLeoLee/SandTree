@@ -192,7 +192,7 @@ impl NamedPipeTransport {
         options.first_pipe_instance(first);
         let server = options
             .create(&self.path)
-            .map_err(|e| ipc_error(format!("cannot create named pipe {}: {e}", self.path)))?;
+            .map_err(|e| create_failure(&self.path, &e))?;
         *self.pipe.lock().await = Some(server);
         Ok(())
     }
@@ -254,7 +254,23 @@ impl NamedPipeTransport {
         self.connect_client().await
     }
 
-    /// Forget the connected pipe, so the next IO call refuses as unconnected.
+    /// Release the connected client, keeping this pipe instance usable.
+    ///
+    /// Distinct from dropping the instance. A named-pipe instance is single-client:
+    /// after a session ends the handle has to be *disconnected* before the next
+    /// `connect` can succeed, and dropping the handle instead would give up the
+    /// name — which is the whole thing this design is holding onto.
+    #[cfg(windows)]
+    pub async fn release_client(&self) -> Result<(), DomainError> {
+        let slot = self.pipe.lock().await;
+        let pipe = slot
+            .as_ref()
+            .ok_or_else(|| ipc_error(format!("named pipe {} is not bound", self.path)))?;
+        pipe.disconnect()
+            .map_err(|e| ipc_error(format!("cannot disconnect {}: {e}", self.path)))
+    }
+
+    /// Forget the instance entirely, releasing the name. Idempotent.
     #[cfg(windows)]
     pub async fn disconnect(&self) {
         *self.pipe.lock().await = None;
@@ -408,6 +424,23 @@ impl NamedPipeClient {
         let pipe = joined.map_err(|e| connect_failure(&self.path, &e))?;
         *self.pipe.lock().await = Some(pipe);
         Ok(())
+    }
+}
+
+/// Turn an OS create error into something an operator can act on.
+///
+/// ERROR_ACCESS_DENIED on a first-instance create means one specific thing:
+/// somebody else already owns this name. Saying so is the difference between
+/// "restart it yourself" and an afternoon of guessing — and the raw message is
+/// localised, exactly like the connect errors below.
+#[cfg(windows)]
+fn create_failure(path: &str, e: &std::io::Error) -> DomainError {
+    match e.raw_os_error() {
+        // ERROR_ACCESS_DENIED
+        Some(5) => ipc_error(format!(
+            "{path} is already taken: another daemon is listening on it"
+        )),
+        _ => ipc_error(format!("cannot create named pipe {path}: {e}")),
     }
 }
 
@@ -641,22 +674,21 @@ mod tests {
     /// This is the NFR-S01 claim in code: if two daemons could both listen on
     /// the per-user pipe, a second daemon would silently intercept the CLI's
     /// `destroy`.
-    /// While one listener is *waiting*, a second listener on the same name is refused.
     ///
-    /// Scoped deliberately to that case, because it is the case that holds. A named
-    /// pipe instance is released once a connection has been served, so "the name is
-    /// exclusively mine" is only true while I am waiting on it — which is exactly
-    /// the window in which a second daemon starting up would matter. The window
-    /// *between* two connections is not covered by this claim, and is recorded as a
-    /// known gap rather than papered over with an assertion that would only hold
-    /// most of the time.
+    /// The claim holds because the holder keeps **one flagged instance for its
+    /// whole lifetime** and lets clients connect to that instance in turn. It
+    /// does *not* hold if the name is kept alive by creating an unflagged
+    /// replacement after each client: `FILE_FLAG_FIRST_PIPE_INSTANCE` only
+    /// refuses a create against an instance that itself carried the flag, so an
+    /// unflagged replacement gives the name back to anyone. See `serve_loop` in
+    /// `apps/daemon`, which is where that distinction is load-bearing.
     #[cfg(windows)]
     #[tokio::test]
-    async fn a_second_listener_is_refused_while_the_first_is_waiting() {
+    async fn a_second_listener_is_refused_while_the_first_holds_the_name() {
         let path = unique_pipe("exclusive");
         let first = NamedPipeTransport::at(path.clone());
         // `bind` is synchronous with respect to the name, so there is no race:
-        // once it returns, the name is held, full stop.
+        // once it returns, the name is held by a flagged instance.
         first
             .bind()
             .await
@@ -668,9 +700,15 @@ mod tests {
             .await
             .expect_err("a second listener must not get the name");
         assert!(
-            err.message.contains("cannot create named pipe"),
-            "the refusal must name the endpoint it lost, got: {e}",
-            e = err.message
+            err.message.contains("already taken"),
+            "the refusal must say the name is taken in words rather than \
+             forwarding a localised OS string, got: {}",
+            err.message
+        );
+        assert!(
+            err.message.contains(&*path),
+            "the refusal must name the endpoint it lost, got: {}",
+            err.message
         );
     }
 

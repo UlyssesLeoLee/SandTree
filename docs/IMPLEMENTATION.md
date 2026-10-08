@@ -263,7 +263,7 @@ dist/SandTree-1.1.0-x64.msi     2.41 MB   安装程序，免提权
 | `cargo deny check advisories` | 无 cargo-deny 二进制 | license/source 两项已由离线门禁覆盖；advisory（RustSec）一项未覆盖 |
 | plugin worker 进程隔离（FR-055） | daemon↔worker 协议、传输抽象与代理已落地并跨传输端到端测通（ADR-019）。worker 仍作为 task 跑在本进程内 | 子进程 spawn。`spawn` 是闭包 `Fn() -> Box<dyn Transport>`，而 `NamedPipeClient` 现已可用（ADR-020），控制平面与回滚语义不动；`apps/plugin-worker/src/main.rs` 仍是空的 `fn main()` |
 
-| G2：IPC 端点独占性（NFR-S01） | daemon 真的监听并应答（ADR-020），`serve_loop` 也关掉了「两次连接之间名字空着」的可用性窗口。但 `FILE_FLAG_FIRST_PIPE_INSTANCE` 不是租约，只在对方也带该标志时拒绝，而 daemon 的替补实例必须不带——实测第二个 daemon 仍可占同一管道 | 需要带外声明：store 旁的锁文件或命名互斥体。已由 `tests/system/tests/ipc_process.rs` 的 `the_endpoint_is_released_between_sessions_which_is_a_known_gap` 持续观察 |
+| G2：IPC 端点独占性（NFR-S01） | **已关闭**（ADR-020 §4）。daemon 让**一个带 `first_pipe_instance` 标志的实例活满整个进程**，每个客户端依次连到同一实例；名字因此被一个带标志的实例永久占住，第二个 daemon 的 `bind_first` 必然 ERROR_ACCESS_DENIED。`a_second_daemon_is_refused_the_endpoint` 持续观察 | — |
 
 ## 7.1 插件生命周期：机制已通，staging 待接（ADR-016）
 

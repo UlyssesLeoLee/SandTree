@@ -1,0 +1,100 @@
+   Compiling sandtree-ipc v1.1.0 (E:\SandTree\crates\ipc)
+   Compiling sandtree-plugin-worker v1.1.0 (E:\SandTree\apps\plugin-worker)
+   Compiling sandtree-daemon v1.1.0 (E:\SandTree\apps\daemon)
+   Compiling sandtree-cli v1.1.0 (E:\SandTree\apps\cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 23.60s
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_cli-746ea4acd3b6a060.exe)
+
+running 17 tests
+test tests::a_failed_response_renders_the_stable_code ... ok
+test tests::force_never_reaches_the_wire_implicitly ... ok
+test tests::a_successful_response_renders_pretty_json ... ok
+test tests::no_arguments_prints_help ... ok
+test tests::every_command_maps_to_a_declared_method ... ok
+test tests::the_version_is_the_workspace_version ... ok
+test tests::a_filter_option_without_a_value_is_an_error ... ok
+test tests::help_mentions_the_confirmation_requirement ... ok
+test tests::show_requires_an_id ... ok
+test tests::the_help_text_says_how_to_ask_for_the_version ... ok
+test tests::the_refusal_names_the_method_and_is_not_retryable ... ok
+test tests::tree_parses_filters ... ok
+test tests::an_unknown_command_or_option_is_rejected ... ok
+test tests::invoke_is_not_forced_unless_the_flag_is_present ... ok
+test tests::help_has_no_method ... ok
+test tests::read_methods_still_work_without_a_daemon ... ok
+test tests::the_local_router_refuses_every_mutating_method ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src\lib.rs (E:\DevCache\cargo\target-dev\debug\deps\sandtree_daemon-8bb6ede46377a044.exe)
+
+running 53 tests
+test events::tests::heartbeats_are_never_durable ... ok
+test events::tests::audit_and_error_events_are_durable ... ok
+test methods::tests::observation_domains_are_validated_by_name ... ok
+test methods::tests::a_kind_filter_ignores_unknown_kinds_rather_than_failing ... ok
+test events::tests::informational_events_are_still_durable ... ok
+test plugins::tests::a_plugin_manifest_is_still_the_only_way_to_name_a_package ... ok
+test plugins::tests::a_refused_swap_leaves_the_reserve_untouched ... ok
+test plugins::tests::a_rollback_can_itself_be_rolled_back ... ok
+test plugins::tests::a_swap_of_an_uninstalled_plugin_is_a_client_error ... ok
+test plugins::tests::an_install_that_cannot_stage_routes_nothing ... ok
+test plugins::tests::control_is_debug_without_a_wasm_engine ... ok
+test plugins::tests::disable_drops_the_rollback_reserve ... ok
+test events::tests::a_skipped_event_is_still_delivered_live ... ok
+test packages::tests::an_empty_or_absent_root_is_not_an_error ... ok
+test plugins::tests::disable_stops_routing_and_reports_whether_anything_was_live ... ok
+test plugins::tests::generations_advance_on_every_swap ... ok
+test plugins::tests::install_stages_then_publishes ... ok
+test plugins::tests::installing_over_a_live_plugin_is_refused_and_names_the_right_method ... ok
+test events::tests::a_durable_write_failure_does_not_stop_delivery ... ok
+test plugins::tests::rollback_returns_to_the_previous_generation ... ok
+test events::tests::emitting_records_the_durable_count_and_publishes ... ok
+test events::tests::purge_reports_how_many_rows_went_away ... ok
+test plugins::tests::rollback_with_nothing_in_reserve_is_a_refusal_not_a_reinstall ... ok
+test plugins::tests::the_default_loader_refuses_rather_than_pretending ... ok
+test loader::tests::staging_a_plugin_with_no_package_on_disk_fails_before_any_engine_is_built ... ok
+test serve::tests::a_pipe_that_is_in_use_is_reported_as_taken ... FAILED
+test serve::tests::an_unused_pipe_is_reported_as_free ... ok
+test serve::tests::one_connection_carries_several_requests ... ok
+test serve::tests::the_daemon_answers_a_client_over_a_real_pipe ... ok
+test tests::the_default_data_dir_is_absolute_and_version_free ... ok
+test packages::tests::a_component_missing_from_an_otherwise_valid_package_is_reported_separately ... ok
+test packages::tests::a_well_formed_package_resolves_to_its_manifest_and_component ... ok
+test packages::tests::a_manifest_with_no_plugin_id_is_rejected_rather_than_defaulted ... ok
+test packages::tests::the_directory_name_is_not_the_identity ... ok
+test packages::tests::the_index_reaches_packages_below_the_root_not_only_direct_children ... ok
+test packages::tests::asking_for_an_absent_plugin_lists_what_is_installed ... ok
+test packages::tests::a_manifest_that_is_not_json_fails_at_index_time ... ok
+test packages::tests::two_packages_claiming_one_identity_are_a_deployment_error ... ok
+test tests::every_known_method_has_a_handler ... ok
+test tests::methods_are_registered_in_sorted_order ... ok
+test methods::tests::a_missing_parameter_is_a_typed_client_error ... ok
+test methods::tests::a_malformed_plugin_id_is_rejected_before_it_reaches_the_host ... ok
+test methods::tests::read_methods_answer_on_an_empty_system ... ok
+test methods::tests::the_plugin_lifecycle_endpoints_are_reachable_not_merely_declared ... ok
+test methods::tests::an_unknown_operation_name_is_rejected ... ok
+test methods::tests::a_malformed_resource_id_is_rejected_before_the_store ... ok
+test methods::tests::every_declared_method_is_routed ... ok
+test tests::the_daemon_boots_without_any_provider_present ... ok
+test methods::tests::the_version_method_reports_the_crate_version ... ok
+test tests::the_event_router_is_shared_with_the_kernel ... ok
+test tests::shutdown_is_idempotent ... ok
+test tests::reconcile_on_an_empty_system_succeeds_and_removes_nothing ... ok
+test methods::tests::a_second_daemon_shares_no_state_with_the_first ... ok
+
+failures:
+
+---- serve::tests::a_pipe_that_is_in_use_is_reported_as_taken stdout ----
+
+thread 'serve::tests::a_pipe_that_is_in_use_is_reported_as_taken' (34700) panicked at apps\daemon\src\serve.rs:221:9:
+\\.\pipe\sandtree-d-45336-taken-0 is already taken: another daemon is listening on it
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    serve::tests::a_pipe_that_is_in_use_is_reported_as_taken
+
+test result: FAILED. 52 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+error: test failed, to rerun pass `-p sandtree-daemon --lib`

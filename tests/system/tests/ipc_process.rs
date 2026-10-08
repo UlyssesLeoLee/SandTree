@@ -136,30 +136,90 @@ fn the_cli_gets_a_real_answer_from_a_real_daemon_over_a_real_pipe() {
     );
 }
 
-/// What is *not* asserted here: that a second daemon is refused the endpoint.
+/// Every flag is read before `--check` acts, whatever order they appear in.
 ///
-/// `FILE_FLAG_FIRST_PIPE_INSTANCE` was the obvious candidate and it does not
-/// work. It refuses a create only against an instance that itself carried the
-/// flag, so as soon as the running daemon replaces its served instance with an
-/// unflagged one — which it must, or it could never replace it — any other
-/// process can take the name. Windows named pipes offer no durable exclusive
-/// claim; that needs an out-of-band lock (a lock file beside the store, or a
-/// named mutex), and it is recorded as an open item in ADR-020 rather than
-/// asserted here.
+/// `--check` used to `return` from inside the argument loop, so anything written
+/// after it was silently dropped. The visible damage was not a crash: it
+/// **checked the wrong pipe and reported success**. `daemon --check --pipe X`
+/// probed the default pipe, which on a dev box is usually free — so a busy
+/// endpoint looked idle, and a broken endpoint looked fine.
 ///
-/// A test asserting the *current* behaviour would enshrine the defect, and one
-/// asserting the desired behaviour would simply be red. Neither belongs in the
-/// gate; the gap belongs in the document that lists gaps.
+/// A self-check that quietly examines the wrong thing is worse than no
+/// self-check, because it is a green light on an unexamined subject.
 #[test]
-fn the_endpoint_is_released_between_sessions_which_is_a_known_gap() {
+fn the_self_check_honours_flags_written_after_it() {
     let (daemon_bin, _) = binaries();
     let data = tempfile::tempdir().expect("temp dir");
-    let pipe = unique_pipe("gap");
+    let pipe = unique_pipe("order");
+
+    // `--check` first, `--pipe` after: the order that used to lose the flag.
+    let out = Command::new(&daemon_bin)
+        .args(["--check", "--pipe", &pipe, "--data-dir"])
+        .arg(data.path())
+        .output()
+        .expect("the daemon runs --check");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(&pipe),
+        "--check must report the pipe it was given, not the default: {stdout}"
+    );
+
+    // And the same in the other order, so neither ordering can drift.
+    let pipe2 = unique_pipe("order2");
+    let out = Command::new(&daemon_bin)
+        .args(["--pipe", &pipe2, "--data-dir"])
+        .arg(data.path())
+        .arg("--check")
+        .output()
+        .expect("the daemon runs --check");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(&pipe2),
+        "--check must report the pipe it was given, not the default: {stdout}"
+    );
+}
+///
+/// This was ADR-020 open gap **G2**, and how it closed is worth recording
+/// because the obvious fix was wrong. `FILE_FLAG_FIRST_PIPE_INSTANCE` is not
+/// a lease: it refuses a create only against an instance that itself carried
+/// the flag. The first attempt kept the name claimed by creating a
+/// *replacement* instance after each client -- but the replacement must NOT
+/// carry the flag (otherwise the daemon could never replace its own instance),
+/// so any other process could still take the name. Measured, not assumed: that
+/// version reported the endpoint free while the daemon was mid-session.
+///
+/// What works needs no new dependency: keep the **one flagged instance alive for
+/// the whole process** and let each client connect to that same instance in
+/// turn. The name is then permanently held by a flagged instance, which is
+/// exactly what a second daemon's `bind_first` collides with.
+/// A second daemon is refused the endpoint while the first is running (NFR-S01).
+///
+/// This was ADR-020 open gap **G2**, and how it closed is worth recording
+/// because the diagnosis written into the ADR the first time was wrong.
+///
+/// `FILE_FLAG_FIRST_PIPE_INSTANCE` refuses a create only against an instance that
+/// itself carried the flag. The first attempt kept the name claimed by creating a
+/// *replacement* instance after each client -- but the replacement must NOT carry
+/// the flag (otherwise the daemon could never replace its own instance), so the
+/// name was given back to anyone who asked.
+///
+/// What works needs no new dependency: keep the **one flagged instance alive for
+/// the whole process**, and let each client connect to that same instance in turn.
+/// The name is then permanently held by a flagged instance, which is exactly what
+/// a second daemon's `bind_first` collides with.
+///
+/// And the reason that took a detour to find: the measurement was broken. See
+/// `the_self_check_honours_flags_written_after_it`.
+#[test]
+fn a_second_daemon_is_refused_the_endpoint() {
+    let (daemon_bin, _) = binaries();
+    let data = tempfile::tempdir().expect("temp dir");
+    let pipe = unique_pipe("exclusive");
 
     let _daemon = start_daemon(&daemon_bin, &pipe, data.path());
 
-    // Hold a connection so the daemon is genuinely mid-session. The binding is
-    // the point: dropping the client would end the session and release the name.
+    // Hold a connection so the daemon is genuinely mid-session: an idle daemon
+    // between clients is the weaker case, and that is the one that slipped through.
     let rt = tokio::runtime::Runtime::new().expect("runtime");
     let _holding = {
         let client = sandtree_ipc::transport::NamedPipeClient::at(&pipe);
@@ -168,18 +228,20 @@ fn the_endpoint_is_released_between_sessions_which_is_a_known_gap() {
         client
     };
 
-    // A second daemon's self-check reports the endpoint free. Recorded here so
-    // that closing the gap makes this test fail, and someone updates the ADR.
     let second = Command::new(&daemon_bin)
         .args(["--check", "--pipe", &pipe, "--data-dir"])
         .arg(data.path())
         .output()
         .expect("the second daemon runs");
-    assert_eq!(
+    assert_ne!(
         second.status.code(),
         Some(0),
-        "ADR-020 gap G2: a second daemon is NOT refused the endpoint. When the \
-         gap is closed this assertion must fail and the ADR updated."
+        "a second daemon must refuse the endpoint rather than share it"
+    );
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(
+        stderr.contains("another daemon may be running"),
+        "the refusal must say why: {stderr}"
     );
 }
 
